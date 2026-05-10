@@ -107,6 +107,10 @@ export async function updateCampus(
   }
 }
 
+// campus.service 只负责余额数值变更。交易流水必须由 use-case 层通过
+// prisma.$transaction 协调 campus 余额变更和
+// transaction.service/createTransaction。API 层禁止直接调用
+// addBalance / deductBalance 完成完整扣费流程。
 export async function addBalance(
   operation: CampusBalanceOperation,
 ): Promise<Campus> {
@@ -124,7 +128,6 @@ export async function addBalance(
   }
 }
 
-// campus.service only changes balance values; operatorId/reason audit rows are handled by use-cases with transaction.service.
 export async function deductBalance(
   operation: CampusBalanceOperation,
 ): Promise<Campus> {
