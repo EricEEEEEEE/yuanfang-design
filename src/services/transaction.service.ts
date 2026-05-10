@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/utils/prisma";
+import { getPrisma } from "@/utils/prisma";
 import type {
   CreateTransactionInput,
   Transaction,
@@ -57,6 +57,7 @@ export async function createTransaction(
   input: CreateTransactionInput,
 ): Promise<Transaction> {
   try {
+    const prisma = getPrisma();
     const transaction = await prisma.transaction.create({
       data: {
         campusId: input.campusId,
@@ -78,6 +79,7 @@ export async function getTransactionById(
   transactionId: string,
 ): Promise<Transaction> {
   try {
+    const prisma = getPrisma();
     const transaction = await prisma.transaction.findUnique({
       where: {
         id: transactionId,
@@ -98,6 +100,7 @@ export async function listTransactionsByCampus(
   campusId: string,
 ): Promise<Transaction[]> {
   try {
+    const prisma = getPrisma();
     const transactions = await prisma.transaction.findMany({
       where: {
         campusId,

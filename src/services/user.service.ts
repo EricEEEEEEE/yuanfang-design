@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/utils/prisma";
+import { getPrisma } from "@/utils/prisma";
 import type { CreateUserInput, UpdateUserInput, User } from "@/models/user";
 
 type UserServiceErrorCode =
@@ -52,6 +52,7 @@ function normalizeError(error: unknown): never {
 
 export async function createUser(input: CreateUserInput): Promise<User> {
   try {
+    const prisma = getPrisma();
     const user = await prisma.user.create({
       data: {
         phone: input.phone,
@@ -70,6 +71,7 @@ export async function createUser(input: CreateUserInput): Promise<User> {
 
 export async function getUserById(userId: string): Promise<User> {
   try {
+    const prisma = getPrisma();
     const user = await prisma.user.findUnique({
       where: {
         id: userId,
@@ -85,6 +87,7 @@ export async function getUserById(userId: string): Promise<User> {
 
 export async function getUserByPhone(phone: string): Promise<User | null> {
   try {
+    const prisma = getPrisma();
     const user = await prisma.user.findUnique({
       where: {
         phone,
@@ -99,6 +102,7 @@ export async function getUserByPhone(phone: string): Promise<User | null> {
 
 export async function listUsersByCampus(campusId: string): Promise<User[]> {
   try {
+    const prisma = getPrisma();
     const users = await prisma.user.findMany({
       where: {
         campusId,
@@ -119,6 +123,7 @@ export async function updateUser(
   input: UpdateUserInput,
 ): Promise<User> {
   try {
+    const prisma = getPrisma();
     const user = await prisma.user.update({
       where: {
         id: userId,

@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/utils/prisma";
+import { getPrisma } from "@/utils/prisma";
 import type { Campus, CampusBalanceOperation, CreateCampusInput, UpdateCampusInput } from "@/models/campus";
 
 type CampusServiceErrorCode =
@@ -52,6 +52,7 @@ function assertPositiveAmount(amount: number): void {
 
 export async function createCampus(input: CreateCampusInput): Promise<Campus> {
   try {
+    const prisma = getPrisma();
     const campus = await prisma.campus.create({
       data: {
         name: input.name,
@@ -70,6 +71,7 @@ export async function createCampus(input: CreateCampusInput): Promise<Campus> {
 
 export async function getCampusById(campusId: string): Promise<Campus> {
   try {
+    const prisma = getPrisma();
     const campus = await prisma.campus.findUnique({ where: { id: campusId } });
 
     if (!campus) fail("CAMPUS_NOT_FOUND");
@@ -81,6 +83,7 @@ export async function getCampusById(campusId: string): Promise<Campus> {
 
 export async function listCampuses(): Promise<Campus[]> {
   try {
+    const prisma = getPrisma();
     const campuses = await prisma.campus.findMany({
       orderBy: { createdAt: "desc" },
     });
@@ -96,6 +99,7 @@ export async function updateCampus(
   input: UpdateCampusInput,
 ): Promise<Campus> {
   try {
+    const prisma = getPrisma();
     const campus = await prisma.campus.update({
       where: { id: campusId },
       data: input,
@@ -117,6 +121,7 @@ export async function addBalance(
   assertPositiveAmount(operation.amount);
 
   try {
+    const prisma = getPrisma();
     const campus = await prisma.campus.update({
       where: { id: operation.campusId },
       data: { balance: { increment: operation.amount } },
@@ -134,6 +139,7 @@ export async function deductBalance(
   assertPositiveAmount(operation.amount);
 
   try {
+    const prisma = getPrisma();
     const updated = await prisma.campus.updateMany({
       where: {
         id: operation.campusId,
