@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/utils/prisma";
 import type { Campus, CampusBalanceOperation, CreateCampusInput, UpdateCampusInput } from "@/models/campus";
 
 type CampusServiceErrorCode =
@@ -8,8 +8,6 @@ type CampusServiceErrorCode =
   | "CAMPUS_SERVICE_ERROR";
 
 type CampusRecord = Omit<Campus, "createdAt"> & { createdAt: Date | string };
-
-const prisma = new PrismaClient();
 
 function toCampus(record: CampusRecord): Campus {
   return {
