@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  PLATFORM_ADMIN
+  CAMPUS_ADMIN
+  USER
+}
+
+enum GenerationMode {
+  STANDARD
+  OPTIMIZE
+}
+
+enum GenerationStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+enum TransactionType {
+  RECHARGE
+  CONSUME
+  REFUND
+}
+
+model User {
+  id        String   @id @default(cuid())
+  phone     String   @unique
+  name      String
+  role      UserRole
+  campusId  String
+  isActive  Boolean
+  createdAt DateTime @default(now())
+
+  campus      Campus       @relation(fields: [campusId], references: [id])
+  generations Generation[]
+}
+
+model Campus {
+  id        String   @id @default(cuid())
+  name      String
+  address   String
+  phone     String
+  balance   Int
+  isActive  Boolean
+  createdAt DateTime @default(now())
+
+  users        User[]
+  generations  Generation[]
+  transactions Transaction[]
+}
+
+model Generation {
+  id             String           @id @default(cuid())
+  userId         String
+  campusId       String
+  mode           GenerationMode
+  sceneType      String
+  inputData      Json
+  uploadedImages Json
+  resultImageUrl String?
+  cost           Int
+  modelUsed      String
+  status         GenerationStatus
+  errorMessage   String?
+  promptVersion  String
+  templateId     String
+  createdAt      DateTime         @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  campus Campus @relation(fields: [campusId], references: [id])
+}
+
+model Transaction {
+  id           String          @id @default(cuid())
+  campusId     String
+  type         TransactionType
+  amount       Int
+  balanceAfter Int
+  referenceId  String
+  operatorId   String
+  createdAt    DateTime        @default(now())
+
+  campus Campus @relation(fields: [campusId], references: [id])
+}
+
+model DailyRecommendation {
+  id                String   @id @default(cuid())
+  date              DateTime @unique
+  topTitle          String
+  topDescription    String
+  topSceneType      String
+  topPrefill        Json
+  bottomTitle       String
+  bottomDescription String
+  bottomSceneType   String
+  bottomPrefill     Json
+  createdAt         DateTime @default(now())
+}
