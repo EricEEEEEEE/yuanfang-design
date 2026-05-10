@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/utils/prisma";
 import type { Campus, CampusBalanceOperation, CreateCampusInput, UpdateCampusInput } from "@/models/campus";
 
@@ -37,6 +38,11 @@ function isBusinessError(error: unknown): boolean {
 
 function normalizeError(error: unknown): never {
   if (isBusinessError(error)) throw error;
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2025") fail("CAMPUS_NOT_FOUND");
+    fail("CAMPUS_SERVICE_ERROR");
+  }
+
   fail("CAMPUS_SERVICE_ERROR");
 }
 
@@ -89,8 +95,6 @@ export async function updateCampus(
   campusId: string,
   input: UpdateCampusInput,
 ): Promise<Campus> {
-  await getCampusById(campusId);
-
   try {
     const campus = await prisma.campus.update({
       where: { id: campusId },
@@ -107,7 +111,6 @@ export async function addBalance(
   operation: CampusBalanceOperation,
 ): Promise<Campus> {
   assertPositiveAmount(operation.amount);
-  await getCampusById(operation.campusId);
 
   try {
     const campus = await prisma.campus.update({
@@ -121,6 +124,7 @@ export async function addBalance(
   }
 }
 
+// campus.service only changes balance values; operatorId/reason audit rows are handled by use-cases with transaction.service.
 export async function deductBalance(
   operation: CampusBalanceOperation,
 ): Promise<Campus> {
