@@ -5,6 +5,15 @@ import type {
   StandardStyleKey,
   StandardThemeKey,
 } from "@/config/scenes";
+import {
+  assertBaseTemplate,
+  assertBrandRulesTemplate,
+  assertPromptFragmentMap,
+  TEMPLATE_INVALID,
+  type BaseTemplate,
+  type BrandRulesTemplate,
+  type PromptFragmentMap,
+} from "@/utils/template-validation";
 
 export type StandardPromptInput = {
   theme: StandardThemeKey;
@@ -35,44 +44,28 @@ export type BuildStandardPromptResult = {
   };
 };
 
-type BaseTemplate = {
-  basePrompt: string;
-  layoutPrompt: string;
-  negativePrompt: string[];
-};
-
-type BrandRulesTemplate = {
-  brandName: string;
-  englishName: string;
-  brandSpirit: string[];
-  colors: Record<string, string>;
-  visualLanguage: string[];
-  allowedVisualMotifs: string[];
-  logoRules: string[];
-  mascotRules: string[];
-};
-
-type PromptFragment = {
-  label: string;
-  purpose?: string;
-  prompt: string;
-};
-
-type PromptFragmentMap<Key extends string> = Record<Key, PromptFragment>;
-
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
 const TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND";
 
-const baseTemplate = loadTemplate<BaseTemplate>("templates/_base.json");
-const brandRules = loadTemplate<BrandRulesTemplate>("templates/_brand-rules.json");
-const themeTemplates = loadTemplate<PromptFragmentMap<StandardThemeKey>>(
+const baseTemplate = loadTemplate<BaseTemplate>(
+  "templates/_base.json",
+  assertBaseTemplate,
+);
+const brandRules = loadTemplate<BrandRulesTemplate>(
+  "templates/_brand-rules.json",
+  assertBrandRulesTemplate,
+);
+const themeTemplates = loadTemplate<PromptFragmentMap>(
   "templates/standard/themes.json",
+  assertPromptFragmentMap,
 );
-const styleTemplates = loadTemplate<PromptFragmentMap<StandardStyleKey>>(
+const styleTemplates = loadTemplate<PromptFragmentMap>(
   "templates/standard/styles.json",
+  assertPromptFragmentMap,
 );
-const elementTemplates = loadTemplate<PromptFragmentMap<StandardElementKey>>(
+const elementTemplates = loadTemplate<PromptFragmentMap>(
   "templates/standard/elements.json",
+  assertPromptFragmentMap,
 );
 
 export function buildStandardPrompt(
@@ -126,11 +119,22 @@ export function buildStandardPrompt(
   };
 }
 
-function loadTemplate<Template>(relativePath: string): Template {
-  const filePath = join(process.cwd(), relativePath);
-  const parsed: unknown = JSON.parse(readFileSync(filePath, "utf8"));
-
-  return parsed as Template;
+function loadTemplate<Template>(
+  relativePath: string,
+  assertTemplate: (value: unknown) => asserts value is Template,
+): Template {
+  try {
+    const parsed: unknown = JSON.parse(
+      readFileSync(join(process.cwd(), relativePath), "utf8"),
+    );
+    assertTemplate(parsed);
+    return parsed;
+  } catch (error) {
+    if (error instanceof Error && error.message === TEMPLATE_INVALID) {
+      throw error;
+    }
+    throw new Error(TEMPLATE_INVALID);
+  }
 }
 
 function buildOverlayData(input: StandardPromptInput): StandardPromptOverlayData {
@@ -160,9 +164,7 @@ function normalizeRequiredText(value: string): string {
 }
 
 function normalizeOptionalText(value?: string): string | undefined {
-  const normalizedValue = value?.trim();
-
-  return normalizedValue || undefined;
+  return value?.trim() || undefined;
 }
 
 function formatColors(colors: Record<string, string>): string {
