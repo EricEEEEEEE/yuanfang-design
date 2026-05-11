@@ -66,7 +66,7 @@ export const STANDARD_STYLES: Record<StandardStyleKey, SceneField> = {
 
 export const STANDARD_ELEMENTS: Record<StandardElementKey, SceneField> = {
   childrenReading: {
-    label: "孩子阅读",
+    label: "阅读氛围元素",
   },
   books: {
     label: "书本 / 书页",
