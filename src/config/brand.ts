@@ -39,8 +39,8 @@ export const BRAND: BrandConfig = {
   mascotPath: "assets/mascot/elephant-main.png",
   fontFamily: "sans-serif",
   logoPosition: {
-    x: 48,
-    y: 48,
+    x: 852,
+    y: 60,
     width: 180,
   },
   mascotPosition: {
