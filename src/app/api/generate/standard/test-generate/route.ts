@@ -6,6 +6,7 @@ import {
 
 const ERROR_STATUS: Record<string, number> = {
   INVALID_REQUEST: 400,
+  TEST_API_DISABLED: 403,
   INVALID_TEMPLATE_INPUT: 400,
   TEMPLATE_NOT_FOUND: 404,
   TEMPLATE_INVALID: 500,
@@ -27,6 +28,10 @@ type StandardTestGenerateBody = {
 };
 
 export async function POST(request: Request): Promise<Response> {
+  if (process.env.ENABLE_TEST_GENERATE_API !== "true") {
+    return errorResponse("TEST_API_DISABLED");
+  }
+
   const body = await parseJson(request);
 
   if (!isStandardTestGenerateBody(body)) {

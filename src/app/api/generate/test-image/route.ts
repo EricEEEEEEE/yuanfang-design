@@ -2,6 +2,7 @@ import { generateImage } from "@/services/image-gen.service";
 
 const ERROR_STATUS: Record<string, number> = {
   INVALID_REQUEST: 400,
+  TEST_API_DISABLED: 403,
   OPENAI_API_KEY_MISSING: 500,
   IMAGE_GENERATION_FAILED: 500,
   IMAGE_RESULT_EMPTY: 500,
@@ -13,6 +14,10 @@ type TestImageBody = {
 };
 
 export async function POST(request: Request): Promise<Response> {
+  if (process.env.ENABLE_TEST_GENERATE_API !== "true") {
+    return errorResponse("TEST_API_DISABLED");
+  }
+
   const body = await parseJson(request);
 
   if (!isTestImageBody(body)) {

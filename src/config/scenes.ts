@@ -72,7 +72,7 @@ export const STANDARD_ELEMENTS: Record<StandardElementKey, SceneField> = {
     label: "书本 / 书页",
   },
   classroom: {
-    label: "课堂场景",
+    label: "课堂空间氛围",
   },
   classicalPoetry: {
     label: "古诗意境",
