@@ -69,6 +69,8 @@ export default function StandardPage() {
   const [selectedTheme, setSelectedTheme] = useState(themeOptions[0].key);
   const [selectedStyle, setSelectedStyle] = useState(styleOptions[0].key);
   const [selectedElement, setSelectedElement] = useState(elementOptions[0].key);
+  const [mainTitle, setMainTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
   const [campusName, setCampusName] = useState("");
   const [campusAddress, setCampusAddress] = useState("");
   const [campusPhone, setCampusPhone] = useState("");
@@ -77,6 +79,8 @@ export default function StandardPage() {
     { label: "已选主题", value: findLabel(themeOptions, selectedTheme) },
     { label: "已选风格", value: findLabel(styleOptions, selectedStyle) },
     { label: "已选元素", value: findLabel(elementOptions, selectedElement) },
+    { label: "主标题", value: mainTitle || "-" },
+    { label: "副标题", value: subtitle || "-" },
     { label: "校区名称", value: campusName || "-" },
     { label: "校区地址", value: campusAddress || "-" },
     { label: "联系电话", value: campusPhone || "-" },
@@ -127,6 +131,28 @@ export default function StandardPage() {
             selectedKey={selectedElement}
             title="元素词"
           />
+
+          <section className="space-y-4">
+            <h2 className="text-base font-semibold text-slate-950">海报文案</h2>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">主标题</span>
+              <input
+                className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-base text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                onChange={(event) => setMainTitle(event.target.value)}
+                placeholder="请输入海报主标题"
+                value={mainTitle}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">副标题</span>
+              <input
+                className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-base text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                onChange={(event) => setSubtitle(event.target.value)}
+                placeholder="请输入海报副标题"
+                value={subtitle}
+              />
+            </label>
+          </section>
 
           <section className="space-y-4">
             <h2 className="text-base font-semibold text-slate-950">校区信息</h2>

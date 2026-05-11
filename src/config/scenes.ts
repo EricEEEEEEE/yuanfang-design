@@ -1,23 +1,22 @@
 export type StandardThemeKey =
-  | "springRecruitment"
-  | "summerClass"
   | "trialClass"
+  | "recruitment"
+  | "seasonalClass"
   | "readingFestival"
-  | "parentOpenDay";
+  | "classicalLiterature"
+  | "showcase";
 
 export type StandardStyleKey =
   | "warm"
   | "lively"
   | "chinese"
-  | "minimal"
   | "literary";
 
 export type StandardElementKey =
   | "childrenReading"
   | "books"
   | "classroom"
-  | "classicalPoetry"
-  | "campus";
+  | "classicalPoetry";
 
 export type OptimizeSceneKey =
   | "teacherPortrait"
@@ -30,20 +29,23 @@ export type SceneField = {
 };
 
 export const STANDARD_THEMES: Record<StandardThemeKey, SceneField> = {
-  springRecruitment: {
-    label: "春季招生",
-  },
-  summerClass: {
-    label: "暑假班",
-  },
   trialClass: {
-    label: "试听课",
+    label: "试听课 / 公开课",
+  },
+  recruitment: {
+    label: "招生推广",
+  },
+  seasonalClass: {
+    label: "寒暑假班",
   },
   readingFestival: {
-    label: "读书节",
+    label: "读书节 / 阅读活动",
   },
-  parentOpenDay: {
-    label: "家长开放日",
+  classicalLiterature: {
+    label: "国学 / 诗词 / 名著活动",
+  },
+  showcase: {
+    label: "汇报课 / 家长开放日",
   },
 };
 
@@ -57,9 +59,6 @@ export const STANDARD_STYLES: Record<StandardStyleKey, SceneField> = {
   chinese: {
     label: "国风",
   },
-  minimal: {
-    label: "简约",
-  },
   literary: {
     label: "文艺",
   },
@@ -70,16 +69,13 @@ export const STANDARD_ELEMENTS: Record<StandardElementKey, SceneField> = {
     label: "孩子阅读",
   },
   books: {
-    label: "书本",
+    label: "书本 / 书页",
   },
   classroom: {
     label: "课堂场景",
   },
   classicalPoetry: {
     label: "古诗意境",
-  },
-  campus: {
-    label: "校园",
   },
 };
 
