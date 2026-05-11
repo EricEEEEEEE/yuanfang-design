@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import sharp from "sharp";
 import { BRAND } from "@/config/brand";
+import { TYPOGRAPHY, type TextStyleConfig } from "@/config/typography";
 
 export type ComposeStandardPosterInput = {
   backgroundImagePath: string;
@@ -26,6 +27,7 @@ type RenderTextLinesParams = {
   y: number;
   lineHeight: number;
   className: string;
+  letterSpacing: number;
 };
 
 export async function composeStandardPoster(
@@ -100,22 +102,33 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
 }
 
 function buildTextOverlay(input: ComposeStandardPosterInput): string {
-  const mainTitleLines = splitTextByLength(input.mainTitle, 12);
-  const subtitleLines = input.subtitle ? splitTextByLength(input.subtitle, 18) : [];
-  const campusNameLines = splitTextByLength(input.campusName, 16);
-  const addressLines = input.campusAddress
-    ? splitTextByLength(input.campusAddress, 24)
+  const mainTitleLines = splitTextByLength(
+    input.mainTitle,
+    TYPOGRAPHY.title.maxCharsPerLine,
+  );
+  const subtitleLines = input.subtitle
+    ? splitTextByLength(input.subtitle, TYPOGRAPHY.subtitle.maxCharsPerLine)
     : [];
-  const subtitleY = 174 + mainTitleLines.length * 72;
-  const addressY = 1426 + campusNameLines.length * 42 + 14;
-  const phoneY = addressLines.length > 0 ? addressY + addressLines.length * 34 + 10 : addressY;
+  const campusNameLines = splitTextByLength(
+    input.campusName,
+    TYPOGRAPHY.campus.maxCharsPerLine,
+  );
+  const addressLines = input.campusAddress
+    ? splitTextByLength(input.campusAddress, TYPOGRAPHY.info.maxCharsPerLine)
+    : [];
+  const subtitleY = 174 + mainTitleLines.length * TYPOGRAPHY.title.lineHeight;
+  const addressY = 1426 + campusNameLines.length * TYPOGRAPHY.campus.lineHeight + 14;
+  const phoneY = addressLines.length > 0
+    ? addressY + addressLines.length * TYPOGRAPHY.info.lineHeight + 10
+    : addressY;
   const subtitleText = subtitleLines.length > 0
     ? renderTextLines({
         lines: subtitleLines,
         x: 72,
         y: subtitleY,
-        lineHeight: 42,
+        lineHeight: TYPOGRAPHY.subtitle.lineHeight,
         className: "subtitle",
+        letterSpacing: TYPOGRAPHY.subtitle.letterSpacing,
       })
     : "";
   const addressText = addressLines.length > 0
@@ -123,19 +136,20 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
         lines: addressLines,
         x: 72,
         y: addressY,
-        lineHeight: 34,
+        lineHeight: TYPOGRAPHY.info.lineHeight,
         className: "info",
+        letterSpacing: TYPOGRAPHY.info.letterSpacing,
       })
     : "";
 
   return `
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
-    .title { fill: ${BRAND.colors.deepBlue}; font-family: ${BRAND.fontFamily}; font-size: 68px; font-weight: 800; }
-    .subtitle { fill: ${BRAND.colors.orange}; font-family: ${BRAND.fontFamily}; font-size: 34px; font-weight: 600; }
-    .campus { fill: ${BRAND.colors.deepBlue}; font-family: ${BRAND.fontFamily}; font-size: 36px; font-weight: 700; }
-    .info { fill: #334155; font-family: ${BRAND.fontFamily}; font-size: 26px; font-weight: 500; }
-    .phone { fill: ${BRAND.colors.red}; font-family: ${BRAND.fontFamily}; font-size: 28px; font-weight: 700; }
+    ${renderTextStyle("title", TYPOGRAPHY.title)}
+    ${renderTextStyle("subtitle", TYPOGRAPHY.subtitle)}
+    ${renderTextStyle("campus", TYPOGRAPHY.campus)}
+    ${renderTextStyle("info", TYPOGRAPHY.info)}
+    ${renderTextStyle("phone", TYPOGRAPHY.phone)}
   </style>
   <rect x="48" y="84" width="760" height="196" rx="28" fill="#FFFFFF" opacity="0.78"/>
   <rect x="48" y="1360" width="984" height="184" rx="28" fill="#FFFFFF" opacity="0.86"/>
@@ -144,20 +158,26 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
     lines: mainTitleLines,
     x: 72,
     y: 174,
-    lineHeight: 72,
+    lineHeight: TYPOGRAPHY.title.lineHeight,
     className: "title",
+    letterSpacing: TYPOGRAPHY.title.letterSpacing,
   })}
   ${subtitleText}
   ${renderTextLines({
     lines: campusNameLines,
     x: 72,
     y: 1426,
-    lineHeight: 42,
+    lineHeight: TYPOGRAPHY.campus.lineHeight,
     className: "campus",
+    letterSpacing: TYPOGRAPHY.campus.letterSpacing,
   })}
   ${addressText}
-  <text x="72" y="${phoneY}" class="phone">${escapeXml(input.campusPhone)}</text>
+  <text x="72" y="${phoneY}" class="phone" letter-spacing="${TYPOGRAPHY.phone.letterSpacing}">${escapeXml(input.campusPhone)}</text>
 </svg>`;
+}
+
+function renderTextStyle(className: string, style: TextStyleConfig): string {
+  return `.${className} { fill: ${style.fill}; font-family: ${style.fontFamily}; font-size: ${style.fontSize}px; font-weight: ${style.fontWeight}; letter-spacing: ${style.letterSpacing}px; }`;
 }
 
 function splitTextByLength(text: string, maxLength: number): string[] {
@@ -176,7 +196,7 @@ function renderTextLines(params: RenderTextLinesParams): string {
     .map((line, index) => {
       const y = params.y + index * params.lineHeight;
 
-      return `<text x="${params.x}" y="${y}" class="${params.className}">${escapeXml(line)}</text>`;
+      return `<text x="${params.x}" y="${y}" class="${params.className}" letter-spacing="${params.letterSpacing}">${escapeXml(line)}</text>`;
     })
     .join("\n  ");
 }
