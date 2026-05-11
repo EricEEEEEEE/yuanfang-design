@@ -44,8 +44,8 @@ export const BRAND: BrandConfig = {
     width: 180,
   },
   mascotPosition: {
-    x: 760,
-    y: 1220,
-    width: 220,
+    x: 800,
+    y: 1260,
+    width: 190,
   },
 };
