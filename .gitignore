@@ -10,3 +10,8 @@ yarn-error.log*
 pnpm-debug.log*
 .DS_Store
 .claude/
+assets/fonts/*.ttf
+assets/fonts/*.otf
+assets/fonts/*.woff
+assets/fonts/*.woff2
+!assets/fonts/.gitkeep

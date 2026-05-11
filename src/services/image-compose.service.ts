@@ -102,6 +102,13 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
 }
 
 function buildTextOverlay(input: ComposeStandardPosterInput): string {
+  const textStyles = [
+    TYPOGRAPHY.title,
+    TYPOGRAPHY.subtitle,
+    TYPOGRAPHY.campus,
+    TYPOGRAPHY.info,
+    TYPOGRAPHY.phone,
+  ];
   const mainTitleLines = splitTextByLength(
     input.mainTitle,
     TYPOGRAPHY.title.maxCharsPerLine,
@@ -145,6 +152,7 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
   return `
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
+    ${buildFontFaceCss(textStyles)}
     ${renderTextStyle("title", TYPOGRAPHY.title)}
     ${renderTextStyle("subtitle", TYPOGRAPHY.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
@@ -174,6 +182,59 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
   ${addressText}
   <text x="72" y="${phoneY}" class="phone" letter-spacing="${TYPOGRAPHY.phone.letterSpacing}">${escapeXml(input.campusPhone)}</text>
 </svg>`;
+}
+
+function buildFontFaceCss(styles: TextStyleConfig[]): string {
+  const seenFontPaths = new Set<string>();
+
+  return styles
+    .map((style) => {
+      if (!style.fontFilePath || seenFontPaths.has(style.fontFilePath)) {
+        return "";
+      }
+
+      seenFontPaths.add(style.fontFilePath);
+
+      const fontPath = resolvePath(style.fontFilePath);
+
+      if (!existsSync(fontPath)) {
+        return "";
+      }
+
+      try {
+        const fontBase64 = readFileSync(fontPath).toString("base64");
+        const fontFamily = style.fontFamily.split(",")[0].trim();
+        const fontFormat = getFontFormat(fontPath);
+
+        return `@font-face { font-family: "${fontFamily}"; src: url("data:font/ttf;base64,${fontBase64}") format("${fontFormat}"); }`;
+      } catch {
+        return "";
+      }
+    })
+    .filter(Boolean)
+    .join("\n    ");
+}
+
+function getFontFormat(filePath: string): string {
+  const lowerCasePath = filePath.toLowerCase();
+
+  if (lowerCasePath.endsWith(".woff2")) {
+    return "woff2";
+  }
+
+  if (lowerCasePath.endsWith(".woff")) {
+    return "woff";
+  }
+
+  if (lowerCasePath.endsWith(".otf")) {
+    return "opentype";
+  }
+
+  if (lowerCasePath.endsWith(".ttf")) {
+    return "truetype";
+  }
+
+  return "truetype";
 }
 
 function renderTextStyle(className: string, style: TextStyleConfig): string {

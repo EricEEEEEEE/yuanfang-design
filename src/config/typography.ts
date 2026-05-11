@@ -1,11 +1,17 @@
 export type TextStyleConfig = {
   fontFamily: string;
+  fontFilePath?: string;
   fontSize: number;
   fontWeight: number;
   fill: string;
   letterSpacing: number;
   lineHeight: number;
   maxCharsPerLine: number;
+};
+
+export type FontFaceConfig = {
+  family: string;
+  filePath?: string;
 };
 
 export type TypographyConfig = {
@@ -17,10 +23,11 @@ export type TypographyConfig = {
 };
 
 const fontFamily = "PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
+const titleFontFamily = fontFamily;
 
 export const TYPOGRAPHY: TypographyConfig = {
   title: {
-    fontFamily,
+    fontFamily: titleFontFamily,
     fontSize: 76,
     fontWeight: 900,
     fill: "#004089",
