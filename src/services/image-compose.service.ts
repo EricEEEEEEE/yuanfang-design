@@ -137,7 +137,6 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
     .info { fill: #334155; font-family: ${BRAND.fontFamily}; font-size: 26px; font-weight: 500; }
     .phone { fill: ${BRAND.colors.red}; font-family: ${BRAND.fontFamily}; font-size: 28px; font-weight: 700; }
   </style>
-  <rect x="820" y="42" width="220" height="150" rx="24" fill="#FFFFFF" opacity="0.82"/>
   <rect x="48" y="84" width="760" height="196" rx="28" fill="#FFFFFF" opacity="0.78"/>
   <rect x="48" y="1360" width="984" height="184" rx="28" fill="#FFFFFF" opacity="0.86"/>
   <rect x="48" y="1360" width="10" height="184" rx="5" fill="${BRAND.colors.orange}"/>
