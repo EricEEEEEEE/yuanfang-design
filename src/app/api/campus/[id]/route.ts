@@ -1,4 +1,4 @@
-import { getCurrentUserFromToken } from "@/services/auth.service";
+import { getCurrentUserFromToken } from "@/use-cases/get-current-user.use-case";
 import { getCampusById, updateCampus } from "@/services/campus.service";
 import type { UpdateCampusInput } from "@/models/campus";
 

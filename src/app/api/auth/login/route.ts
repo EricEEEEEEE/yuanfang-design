@@ -1,4 +1,4 @@
-import { loginWithInviteCode } from "@/services/auth.service";
+import { loginWithInviteCode } from "@/use-cases/login-with-invite.use-case";
 
 const ERROR_STATUS: Record<string, number> = {
   INVALID_REQUEST: 400,

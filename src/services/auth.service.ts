@@ -1,25 +1,16 @@
 import { SignJWT, jwtVerify } from "jose";
-import { getUserById, getUserByPhone } from "@/services/user.service";
 import type { User } from "@/models/user";
 
-export type AuthSession = {
-  token: string;
-  user: User;
-};
-
-type AuthServiceErrorCode =
-  | "INVALID_INVITE_CODE"
-  | "USER_NOT_FOUND"
-  | "USER_INACTIVE"
-  | "JWT_SECRET_MISSING"
-  | "TOKEN_INVALID"
-  | "AUTH_SERVICE_ERROR";
-
-type AuthTokenPayload = {
+export type AuthTokenPayload = {
   userId: string;
   role: User["role"];
   campusId: string;
 };
+
+type AuthServiceErrorCode =
+  | "JWT_SECRET_MISSING"
+  | "TOKEN_INVALID"
+  | "AUTH_SERVICE_ERROR";
 
 const JWT_EXPIRES_IN = "7d";
 
@@ -37,41 +28,52 @@ function getJwtSecret(): Uint8Array {
   return new TextEncoder().encode(secret);
 }
 
-function isAuthError(error: unknown): boolean {
+function isAuthServiceError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    [
-      "INVALID_INVITE_CODE",
-      "USER_NOT_FOUND",
-      "USER_INACTIVE",
-      "JWT_SECRET_MISSING",
-      "TOKEN_INVALID",
-      "AUTH_SERVICE_ERROR",
-    ].includes(error.message)
+    ["JWT_SECRET_MISSING", "TOKEN_INVALID", "AUTH_SERVICE_ERROR"].includes(
+      error.message,
+    )
   );
 }
 
-function normalizeAuthError(error: unknown): never {
-  if (isAuthError(error)) {
+function normalizeCreateTokenError(error: unknown): never {
+  if (isAuthServiceError(error)) {
     throw error;
   }
 
   fail("AUTH_SERVICE_ERROR");
 }
 
-async function createToken(user: User): Promise<string> {
-  return new SignJWT({
-    userId: user.id,
-    role: user.role,
-    campusId: user.campusId,
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setIssuedAt()
-    .setExpirationTime(JWT_EXPIRES_IN)
-    .sign(getJwtSecret());
+export async function verifyInviteCode(inviteCode: string): Promise<boolean> {
+  const expectedInviteCode = process.env.MVP_INVITE_CODE;
+
+  if (!expectedInviteCode) {
+    return false;
+  }
+
+  return inviteCode === expectedInviteCode;
 }
 
-async function readTokenPayload(token: string): Promise<AuthTokenPayload> {
+export async function createTokenForUser(user: User): Promise<string> {
+  try {
+    return await new SignJWT({
+      userId: user.id,
+      role: user.role,
+      campusId: user.campusId,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime(JWT_EXPIRES_IN)
+      .sign(getJwtSecret());
+  } catch (error) {
+    normalizeCreateTokenError(error);
+  }
+}
+
+export async function verifyTokenPayload(
+  token: string,
+): Promise<AuthTokenPayload> {
   try {
     const { payload } = await jwtVerify(token, getJwtSecret());
     const { userId, role, campusId } = payload;
@@ -90,74 +92,10 @@ async function readTokenPayload(token: string): Promise<AuthTokenPayload> {
       campusId,
     };
   } catch (error) {
-    if (isAuthError(error)) {
+    if (error instanceof Error && error.message === "JWT_SECRET_MISSING") {
       throw error;
     }
 
     fail("TOKEN_INVALID");
   }
-}
-
-export async function verifyInviteCode(inviteCode: string): Promise<boolean> {
-  const expectedInviteCode = process.env.MVP_INVITE_CODE;
-
-  if (!expectedInviteCode) {
-    return false;
-  }
-
-  return inviteCode === expectedInviteCode;
-}
-
-export async function loginWithInviteCode(
-  phone: string,
-  inviteCode: string,
-): Promise<AuthSession> {
-  try {
-    const isInviteCodeValid = await verifyInviteCode(inviteCode);
-
-    if (!isInviteCodeValid) {
-      fail("INVALID_INVITE_CODE");
-    }
-
-    const user = await getUserByPhone(phone);
-
-    if (!user) {
-      fail("USER_NOT_FOUND");
-    }
-
-    if (!user.isActive) {
-      fail("USER_INACTIVE");
-    }
-
-    return {
-      token: await createToken(user),
-      user,
-    };
-  } catch (error) {
-    normalizeAuthError(error);
-  }
-}
-
-export async function verifyToken(token: string): Promise<AuthSession> {
-  try {
-    const payload = await readTokenPayload(token);
-    const user = await getUserById(payload.userId);
-
-    if (!user.isActive) {
-      fail("USER_INACTIVE");
-    }
-
-    return {
-      token,
-      user,
-    };
-  } catch (error) {
-    normalizeAuthError(error);
-  }
-}
-
-export async function getCurrentUserFromToken(token: string): Promise<User> {
-  const session = await verifyToken(token);
-
-  return session.user;
 }

@@ -1,4 +1,4 @@
-import { getCurrentUserFromToken } from "@/services/auth.service";
+import { getCurrentUserFromToken } from "@/use-cases/get-current-user.use-case";
 
 const ERROR_STATUS: Record<string, number> = {
   TOKEN_MISSING: 401,
