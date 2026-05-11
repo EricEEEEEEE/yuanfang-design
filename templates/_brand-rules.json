@@ -1,3 +1,56 @@
 {
-  "_comment": "Brand rule template placeholder. No implementation in this step."
+  "brandName": "花开远方",
+  "englishName": "BLOOMING FUTURE",
+  "brandSpirit": [
+    "儿童文学教育",
+    "阅读",
+    "表达",
+    "成长",
+    "服务于考试且高于考试"
+  ],
+  "colors": {
+    "red": "#C30D23",
+    "orange": "#EF7A00",
+    "green": "#8FC31F",
+    "skyBlue": "#2EA7E0",
+    "deepBlue": "#004089"
+  },
+  "visualLanguage": [
+    "明亮积极",
+    "儿童文学感",
+    "高饱和但不刺眼",
+    "书本与阅读氛围",
+    "品牌曲线辅助图形",
+    "成长与打开世界的感觉"
+  ],
+  "allowedVisualMotifs": [
+    "抽象彩色流线",
+    "书页般的波浪形色块",
+    "阅读场景",
+    "课堂场景",
+    "儿童文学想象世界",
+    "书本",
+    "纸张",
+    "山水",
+    "月亮",
+    "竹子",
+    "卷轴",
+    "云纹"
+  ],
+  "logoRules": [
+    "AI 不得生成远方 Logo",
+    "AI 不得生成类似远方 Logo 的花瓣标志",
+    "Logo 只能由官方素材后期叠加",
+    "不得变形 Logo",
+    "不得改色 Logo",
+    "不得倾斜 Logo",
+    "不得给 Logo 加阴影",
+    "不得把 Logo 透明化",
+    "不得把 Logo 放进复杂低对比背景"
+  ],
+  "mascotRules": [
+    "AI 不得生成官方大象吉祥物",
+    "AI 不得模仿或重绘官方大象",
+    "大象吉祥物只能由官方素材后期叠加"
+  ]
 }
