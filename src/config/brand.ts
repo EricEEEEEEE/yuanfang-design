@@ -4,10 +4,20 @@ export type BrandAssetPosition = {
   width: number;
 };
 
+export type BrandColors = {
+  red: string;
+  orange: string;
+  green: string;
+  skyBlue: string;
+  deepBlue: string;
+};
+
 export type BrandConfig = {
-  primaryColor: string;
-  secondaryColor: string;
+  name: string;
+  englishName: string;
+  colors: BrandColors;
   logoPath: string;
+  logoSymbolPath: string;
   mascotPath: string;
   fontFamily: string;
   logoPosition: BrandAssetPosition;
@@ -15,19 +25,27 @@ export type BrandConfig = {
 };
 
 export const BRAND: BrandConfig = {
-  primaryColor: "#2F80ED",
-  secondaryColor: "#F2994A",
+  name: "花开远方",
+  englishName: "BLOOMING FUTURE",
+  colors: {
+    red: "#C30D23",
+    orange: "#EF7A00",
+    green: "#8FC31F",
+    skyBlue: "#2EA7E0",
+    deepBlue: "#004089",
+  },
   logoPath: "assets/logo/logo-main.png",
+  logoSymbolPath: "assets/logo/logo-symbol.png",
   mascotPath: "assets/mascot/elephant-main.png",
   fontFamily: "sans-serif",
   logoPosition: {
-    x: 40,
-    y: 40,
-    width: 120,
+    x: 48,
+    y: 48,
+    width: 180,
   },
   mascotPosition: {
-    x: 900,
-    y: 1300,
-    width: 150,
+    x: 760,
+    y: 1220,
+    width: 220,
   },
 };
