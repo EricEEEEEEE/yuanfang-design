@@ -15,6 +15,7 @@ type PreviewPromptBody = {
   theme: string;
   style: string;
   element: string;
+  visualBrief?: string;
   mainTitle: string;
   subtitle?: string;
   campusName: string;
@@ -55,6 +56,7 @@ function isPreviewPromptBody(value: unknown): value is PreviewPromptBody {
     isRequiredString(value.theme) &&
     isRequiredString(value.style) &&
     isRequiredString(value.element) &&
+    isOptionalString(value.visualBrief) &&
     isRequiredString(value.mainTitle) &&
     isRequiredString(value.campusName) &&
     isRequiredString(value.campusPhone) &&

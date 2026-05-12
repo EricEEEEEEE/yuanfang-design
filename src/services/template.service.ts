@@ -19,6 +19,7 @@ export type StandardPromptInput = {
   theme: StandardThemeKey;
   style: StandardStyleKey;
   element: StandardElementKey;
+  visualBrief?: string;
   mainTitle: string;
   subtitle?: string;
   campusName: string;
@@ -75,6 +76,15 @@ export function buildStandardPrompt(
   const themeTemplate = themeTemplates[input.theme];
   const styleTemplate = styleTemplates[input.style];
   const elementTemplate = elementTemplates[input.element];
+  const visualBrief = normalizeOptionalText(input.visualBrief);
+  const visualBriefPrompt = visualBrief
+    ? [
+        "",
+        "【视觉主题参考】",
+        visualBrief,
+        "以上内容只作为画面主题和意象参考，不得生成任何文字、标题、Logo、二维码、电话或校区信息。",
+      ]
+    : [];
 
   if (!themeTemplate || !styleTemplate || !elementTemplate) {
     throw new Error(TEMPLATE_NOT_FOUND);
@@ -103,6 +113,7 @@ export function buildStandardPrompt(
       "",
       "【画面元素】",
       elementTemplate.prompt,
+      ...visualBriefPrompt,
       "",
       "【版式要求】",
       baseTemplate.layoutPrompt,
