@@ -14,6 +14,7 @@ import {
   TITLE_DIRECTOR_PRESETS,
   type TitleDirectorDecision,
   type TitleLineBreakMode,
+  type TitleOrientation,
   type TitlePlacementKey,
   type TitleScaleLevel,
 } from "@/config/title-director";
@@ -95,6 +96,26 @@ type TitlePlacementConfig = {
   x: number;
   y: number;
   textAnchor?: "start" | "middle";
+};
+
+type ResolvedTitleLayout = {
+  placement: TitlePlacementConfig;
+  orientation: TitleOrientation;
+  rotation?: number;
+};
+
+type TitleRenderState = {
+  layout: ResolvedTitleLayout;
+  mainTitleLines: string[];
+  subtitleLines: string[];
+  titleLineHeight: number;
+  subtitleY: number;
+};
+
+type DirectedTitleTextParams = {
+  state: TitleRenderState;
+  titleStyle: TextStyleWithEffects;
+  subtitleStyle: TextStyleWithEffects;
 };
 
 export async function composeStandardPoster(
@@ -206,14 +227,17 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
 
 function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
   const titleDirectorDecision = getTitleDirectorDecision(input);
-  const titlePlacement = getTitlePlacementConfig(
-    "topLeft",
-    "topLeft",
-  );
   const titleArtTextStyles = buildTitleArtTextStyles(
     titleDirectorDecision.titleArtStyle,
     titleDirectorDecision.fontKey,
     titleDirectorDecision,
+  );
+  const titleRenderState = buildTitleRenderState(
+    input,
+    titleDirectorDecision,
+    titleArtTextStyles,
+    "topLeft",
+    0,
   );
   const textStyles = [
     titleArtTextStyles.title,
@@ -223,36 +247,6 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
     TYPOGRAPHY.phone,
   ];
   const { policy } = getDisplayPolicy(input.displayPolicy);
-  const mainTitleLines = splitTextByLength(
-    input.mainTitle,
-    getTitleMaxCharsPerLine(
-      titleArtTextStyles.title.maxCharsPerLine,
-      titleDirectorDecision.lineBreakMode,
-      titlePlacement,
-    ),
-  );
-  const subtitleLines = input.subtitle
-    ? splitTextByLength(
-        input.subtitle,
-        getSubtitleMaxCharsPerLine(
-          titleArtTextStyles.subtitle.maxCharsPerLine,
-          titleDirectorDecision.lineBreakMode,
-          titlePlacement,
-        ),
-      )
-    : [];
-  const subtitleY = titlePlacement.y + mainTitleLines.length * titleArtTextStyles.title.lineHeight;
-  const subtitleText = subtitleLines.length > 0
-    ? renderTitleArtTextLines({
-        lines: subtitleLines,
-        x: titlePlacement.x,
-        y: subtitleY,
-        lineHeight: titleArtTextStyles.subtitle.lineHeight,
-        className: "subtitle",
-        letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
-        textAnchor: titlePlacement.textAnchor,
-      })
-    : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
   const titleBackground = buildTitleBackground({
     x: 48,
@@ -278,29 +272,27 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
   </style>
   ${titleBackground}
   ${campusInfoOverlay}
-  ${renderTitleArtTextLines({
-    lines: mainTitleLines,
-    x: titlePlacement.x,
-    y: titlePlacement.y,
-    lineHeight: titleArtTextStyles.title.lineHeight,
-    className: "title",
-    letterSpacing: titleArtTextStyles.title.letterSpacing,
-    textAnchor: titlePlacement.textAnchor,
+  ${renderDirectedTitleTextLines({
+    state: titleRenderState,
+    titleStyle: titleArtTextStyles.title,
+    subtitleStyle: titleArtTextStyles.subtitle,
   })}
-  ${subtitleText}
 </svg>`;
 }
 
 function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string {
   const titleDirectorDecision = getTitleDirectorDecision(input);
-  const titlePlacement = getTitlePlacementConfig(
-    titleDirectorDecision.placement,
-    "topCenter",
-  );
   const titleArtTextStyles = buildTitleArtTextStyles(
     titleDirectorDecision.titleArtStyle,
     titleDirectorDecision.fontKey,
     titleDirectorDecision,
+  );
+  const titleRenderState = buildTitleRenderState(
+    input,
+    titleDirectorDecision,
+    titleArtTextStyles,
+    "topCenter",
+    -28,
   );
   const textStyles = [
     titleArtTextStyles.title,
@@ -310,42 +302,12 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
     TYPOGRAPHY.phone,
   ];
   const { policy } = getDisplayPolicy(input.displayPolicy);
-  const mainTitleLines = splitTextByLength(
-    input.mainTitle,
-    getTitleMaxCharsPerLine(
-      titleArtTextStyles.title.maxCharsPerLine,
-      titleDirectorDecision.lineBreakMode,
-      titlePlacement,
-    ),
-  );
-  const subtitleLines = input.subtitle
-    ? splitTextByLength(
-        input.subtitle,
-        getSubtitleMaxCharsPerLine(
-          titleArtTextStyles.subtitle.maxCharsPerLine,
-          titleDirectorDecision.lineBreakMode,
-          titlePlacement,
-        ),
-      )
-    : [];
-  const subtitleY = titlePlacement.y + mainTitleLines.length * titleArtTextStyles.title.lineHeight - 28;
   const titlePanelHeight = Math.max(
     210,
     96 +
-      mainTitleLines.length * titleArtTextStyles.title.lineHeight +
-      subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
+      titleRenderState.mainTitleLines.length * titleRenderState.titleLineHeight +
+      titleRenderState.subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
   );
-  const subtitleText = subtitleLines.length > 0
-    ? renderTitleArtTextLines({
-        lines: subtitleLines,
-        x: titlePlacement.x,
-        y: subtitleY,
-        lineHeight: titleArtTextStyles.subtitle.lineHeight,
-        className: "subtitle",
-        letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
-        textAnchor: titlePlacement.textAnchor,
-      })
-    : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
   const titleBackground = buildTitleBackground({
     x: 120,
@@ -371,29 +333,27 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
   </style>
   ${titleBackground}
   ${campusInfoOverlay}
-  ${renderTitleArtTextLines({
-    lines: mainTitleLines,
-    x: titlePlacement.x,
-    y: titlePlacement.y,
-    lineHeight: titleArtTextStyles.title.lineHeight,
-    className: "title",
-    letterSpacing: titleArtTextStyles.title.letterSpacing,
-    textAnchor: titlePlacement.textAnchor,
+  ${renderDirectedTitleTextLines({
+    state: titleRenderState,
+    titleStyle: titleArtTextStyles.title,
+    subtitleStyle: titleArtTextStyles.subtitle,
   })}
-  ${subtitleText}
 </svg>`;
 }
 
 function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
   const titleDirectorDecision = getTitleDirectorDecision(input);
-  const titlePlacement = getTitlePlacementConfig(
-    "leftBlock",
-    "leftBlock",
-  );
   const titleArtTextStyles = buildTitleArtTextStyles(
     titleDirectorDecision.titleArtStyle,
     titleDirectorDecision.fontKey,
     titleDirectorDecision,
+  );
+  const titleRenderState = buildTitleRenderState(
+    input,
+    titleDirectorDecision,
+    titleArtTextStyles,
+    "leftBlock",
+    24,
   );
   const textStyles = [
     titleArtTextStyles.title,
@@ -403,42 +363,12 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
     TYPOGRAPHY.phone,
   ];
   const { policy } = getDisplayPolicy(input.displayPolicy);
-  const mainTitleLines = splitTextByLength(
-    input.mainTitle,
-    getTitleMaxCharsPerLine(
-      titleArtTextStyles.title.maxCharsPerLine,
-      titleDirectorDecision.lineBreakMode,
-      titlePlacement,
-    ),
-  );
-  const subtitleLines = input.subtitle
-    ? splitTextByLength(
-        input.subtitle,
-        getSubtitleMaxCharsPerLine(
-          titleArtTextStyles.subtitle.maxCharsPerLine,
-          titleDirectorDecision.lineBreakMode,
-          titlePlacement,
-        ),
-      )
-    : [];
-  const subtitleY = titlePlacement.y + mainTitleLines.length * titleArtTextStyles.title.lineHeight + 24;
   const titlePanelHeight = Math.max(
     360,
     164 +
-      mainTitleLines.length * titleArtTextStyles.title.lineHeight +
-      subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
+      titleRenderState.mainTitleLines.length * titleRenderState.titleLineHeight +
+      titleRenderState.subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
   );
-  const subtitleText = subtitleLines.length > 0
-    ? renderTitleArtTextLines({
-        lines: subtitleLines,
-        x: titlePlacement.x,
-        y: subtitleY,
-        lineHeight: titleArtTextStyles.subtitle.lineHeight,
-        className: "subtitle",
-        letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
-        textAnchor: titlePlacement.textAnchor,
-      })
-    : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
   const titleBackground = buildTitleBackground({
     x: 54,
@@ -464,16 +394,11 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
   </style>
   ${titleBackground}
   ${campusInfoOverlay}
-  ${renderTitleArtTextLines({
-    lines: mainTitleLines,
-    x: titlePlacement.x,
-    y: titlePlacement.y,
-    lineHeight: titleArtTextStyles.title.lineHeight,
-    className: "title",
-    letterSpacing: titleArtTextStyles.title.letterSpacing,
-    textAnchor: titlePlacement.textAnchor,
+  ${renderDirectedTitleTextLines({
+    state: titleRenderState,
+    titleStyle: titleArtTextStyles.title,
+    subtitleStyle: titleArtTextStyles.subtitle,
   })}
-  ${subtitleText}
 </svg>`;
 }
 
@@ -539,8 +464,14 @@ function buildTitleArtTextStyles(
   const fontFilePath = getFontFilePath(fontKeyOverride ?? style.fontKey);
   const fontFamily =
     "YuanFangTitleArt, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
-  const titleScale = getTitleScaleMultiplier(titleDirectorDecision?.titleScale);
-  const subtitleScale = getTitleScaleMultiplier(titleDirectorDecision?.subtitleScale);
+  const scaleIntensity = getScaleIntensityMultiplier(
+    titleDirectorDecision?.scaleIntensity,
+  );
+  const titleScale =
+    getTitleScaleMultiplier(titleDirectorDecision?.titleScale) * scaleIntensity;
+  const subtitleScale =
+    getTitleScaleMultiplier(titleDirectorDecision?.subtitleScale) *
+    Math.min(scaleIntensity, 1.10);
 
   return {
     title: {
@@ -700,6 +631,194 @@ function getTitleDirectorPresetKey(
   return "cleanBrand";
 }
 
+function buildTitleRenderState(
+  input: ComposeStandardPosterInput,
+  decision: TitleDirectorDecision,
+  titleArtTextStyles: TitleArtTextStyles,
+  fallbackPlacement: TitlePlacementKey,
+  subtitleOffset: number,
+): TitleRenderState {
+  const layout = resolveTitleLayout(decision, fallbackPlacement);
+  const mainTitleLines = getDirectedMainTitleLines(
+    input.mainTitle,
+    layout,
+    decision,
+    titleArtTextStyles.title.maxCharsPerLine,
+  );
+  const subtitleLines = input.subtitle
+    ? getDirectedSubtitleLines(
+        input.subtitle,
+        layout,
+        decision,
+        titleArtTextStyles.subtitle.maxCharsPerLine,
+      )
+    : [];
+  const titleLineHeight = getDirectedTitleLineHeight(
+    titleArtTextStyles.title,
+    layout.orientation,
+  );
+  const subtitleY = getDirectedSubtitleY(
+    layout,
+    mainTitleLines.length,
+    titleLineHeight,
+    subtitleOffset,
+  );
+
+  return {
+    layout,
+    mainTitleLines,
+    subtitleLines,
+    titleLineHeight,
+    subtitleY,
+  };
+}
+
+function resolveTitleLayout(
+  decision: TitleDirectorDecision,
+  fallbackPlacement: TitlePlacementKey,
+): ResolvedTitleLayout {
+  const basePlacement = getTitlePlacementConfig(
+    decision.placement,
+    fallbackPlacement,
+  );
+  let placement = basePlacement;
+  let orientation = getSupportedTitleOrientation(decision.orientation);
+  let rotation: number | undefined;
+
+  if (decision.compositionMode === "heroCenter") {
+    placement = { x: 540, y: 245, textAnchor: "middle" };
+  }
+
+  if (decision.compositionMode === "topBanner") {
+    placement = decision.placement === "topLeft"
+      ? { x: 72, y: 174 }
+      : { x: 540, y: 195, textAnchor: "middle" };
+  }
+
+  if (decision.compositionMode === "leftBlock") {
+    placement = { x: 90, y: 240 };
+  }
+
+  if (decision.compositionMode === "editorialBlock") {
+    placement = { x: 540, y: 180, textAnchor: "middle" };
+  }
+
+  if (
+    decision.compositionMode === "sealBadge" ||
+    decision.compositionMode === "rightVertical"
+  ) {
+    placement = { x: 820, y: 260, textAnchor: "middle" };
+    orientation = "vertical";
+  }
+
+  if (decision.compositionMode === "leftVertical") {
+    placement = { x: 210, y: 260, textAnchor: "middle" };
+    orientation = "vertical";
+  }
+
+  if (decision.compositionMode === "diagonalDynamic") {
+    placement = { x: 380, y: 270, textAnchor: "middle" };
+    orientation = "diagonal";
+    rotation = -8;
+  }
+
+  if (orientation === "diagonal" && rotation === undefined) {
+    rotation = -8;
+  }
+
+  return { placement, orientation, ...(rotation ? { rotation } : {}) };
+}
+
+function getSupportedTitleOrientation(
+  orientation?: TitleOrientation,
+): TitleOrientation {
+  if (
+    orientation === "vertical" ||
+    orientation === "diagonal" ||
+    orientation === "stacked"
+  ) {
+    return orientation;
+  }
+
+  return "horizontal";
+}
+
+function getDirectedMainTitleLines(
+  title: string,
+  layout: ResolvedTitleLayout,
+  decision: TitleDirectorDecision,
+  baseMaxCharsPerLine: number,
+): string[] {
+  if (layout.orientation === "vertical") {
+    return Array.from(title);
+  }
+
+  if (layout.orientation === "stacked") {
+    return splitTextByLength(title, 3);
+  }
+
+  return splitTextByLength(
+    title,
+    getTitleMaxCharsPerLine(
+      baseMaxCharsPerLine,
+      decision.lineBreakMode,
+      layout.placement,
+    ),
+  );
+}
+
+function getDirectedSubtitleLines(
+  subtitle: string,
+  layout: ResolvedTitleLayout,
+  decision: TitleDirectorDecision,
+  baseMaxCharsPerLine: number,
+): string[] {
+  if (layout.orientation === "vertical") {
+    return splitTextByLength(subtitle, 12);
+  }
+
+  if (layout.orientation === "stacked") {
+    return splitTextByLength(subtitle, 8);
+  }
+
+  return splitTextByLength(
+    subtitle,
+    getSubtitleMaxCharsPerLine(
+      baseMaxCharsPerLine,
+      decision.lineBreakMode,
+      layout.placement,
+    ),
+  );
+}
+
+function getDirectedTitleLineHeight(
+  style: TextStyleWithEffects,
+  orientation: TitleOrientation,
+): number {
+  if (orientation === "vertical") {
+    return Math.round(style.fontSize * 1.1);
+  }
+
+  if (orientation === "stacked") {
+    return Math.round(style.lineHeight * 0.92);
+  }
+
+  return style.lineHeight;
+}
+
+function getDirectedSubtitleY(
+  layout: ResolvedTitleLayout,
+  mainTitleLineCount: number,
+  titleLineHeight: number,
+  subtitleOffset: number,
+): number {
+  if (layout.orientation === "vertical") {
+    return layout.placement.y + mainTitleLineCount * titleLineHeight + 42;
+  }
+
+  return layout.placement.y + mainTitleLineCount * titleLineHeight + subtitleOffset;
+}
+
 function getTitlePlacementConfig(
   placement: TitlePlacementKey,
   fallbackPlacement: TitlePlacementKey,
@@ -779,6 +898,20 @@ function getTitleScaleMultiplier(scale?: TitleScaleLevel): number {
 
   if (scale === "large") {
     return 1.12;
+  }
+
+  return 1;
+}
+
+function getScaleIntensityMultiplier(
+  scaleIntensity?: TitleDirectorDecision["scaleIntensity"],
+): number {
+  if (scaleIntensity === "huge") {
+    return 1.18;
+  }
+
+  if (scaleIntensity === "large") {
+    return 1.08;
   }
 
   return 1;
@@ -910,6 +1043,37 @@ function buildFullCampusInfoOverlay(input: ComposeStandardPosterInput): string {
   }
 
   return parts.join("\n  ");
+}
+
+function renderDirectedTitleTextLines(params: DirectedTitleTextParams): string {
+  const { layout } = params.state;
+  const titleText = renderTitleArtTextLines({
+    lines: params.state.mainTitleLines,
+    x: layout.placement.x,
+    y: layout.placement.y,
+    lineHeight: params.state.titleLineHeight,
+    className: "title",
+    letterSpacing: params.titleStyle.letterSpacing,
+    textAnchor: layout.placement.textAnchor,
+  });
+  const subtitleText = params.state.subtitleLines.length > 0
+    ? renderTitleArtTextLines({
+        lines: params.state.subtitleLines,
+        x: layout.placement.x,
+        y: params.state.subtitleY,
+        lineHeight: params.subtitleStyle.lineHeight,
+        className: "subtitle",
+        letterSpacing: params.subtitleStyle.letterSpacing,
+        textAnchor: layout.placement.textAnchor,
+      })
+    : "";
+  const content = [titleText, subtitleText].filter(Boolean).join("\n  ");
+
+  if (layout.orientation === "diagonal") {
+    return `<g transform="rotate(${layout.rotation ?? -8} ${layout.placement.x} ${layout.placement.y})">\n  ${content}\n  </g>`;
+  }
+
+  return content;
 }
 
 function renderTitleArtTextLines(params: RenderTextLinesParams): string {
