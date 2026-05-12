@@ -20,6 +20,11 @@ type StandardTestGenerateBody = {
   theme: string;
   style: string;
   element: string;
+  productOutputType?: string;
+  eventBrief?: string;
+  styleBrief?: string;
+  visualDetails?: string;
+  avoidNotes?: string;
   visualBrief?: string;
   mainTitle: string;
   subtitle?: string;
@@ -75,6 +80,11 @@ function isStandardTestGenerateBody(
     isRequiredString(value.theme) &&
     isRequiredString(value.style) &&
     isRequiredString(value.element) &&
+    isOptionalString(value.productOutputType) &&
+    isOptionalString(value.eventBrief) &&
+    isOptionalString(value.styleBrief) &&
+    isOptionalString(value.visualDetails) &&
+    isOptionalString(value.avoidNotes) &&
     isOptionalString(value.visualBrief) &&
     isRequiredString(value.mainTitle) &&
     isRequiredString(value.campusName) &&
