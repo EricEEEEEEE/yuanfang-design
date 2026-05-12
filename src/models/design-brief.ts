@@ -1,3 +1,5 @@
+import type { StandardDesignFamilyKey } from "@/config/design-families";
+
 export type ProductOutputType =
   | "mainVisual"
   | "socialPoster"
@@ -13,6 +15,7 @@ export type ProductOutputType =
   | "xiaohongshuCover";
 
 export type StandardDesignBriefInput = {
+  designFamily?: StandardDesignFamilyKey;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
@@ -34,6 +37,7 @@ export type StandardDesignBriefOverlayData = {
 };
 
 export type StandardDesignBriefPromptFields = {
+  designFamily?: StandardDesignFamilyKey;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;

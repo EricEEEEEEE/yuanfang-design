@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { STANDARD_DESIGN_FAMILIES, type StandardDesignFamilyKey } from "@/config/design-families";
 import type { StandardElementKey, StandardStyleKey, StandardThemeKey } from "@/config/scenes";
 import type { ProductOutputType, StandardDesignBriefPromptFields } from "@/models/design-brief";
 import {
@@ -16,6 +17,7 @@ export type StandardPromptInput = {
   theme: StandardThemeKey;
   style: StandardStyleKey;
   element: StandardElementKey;
+  designFamily?: StandardDesignFamilyKey;
   productOutputType?: ProductOutputType;
   eventBrief?: string;
   styleBrief?: string;
@@ -28,18 +30,8 @@ export type StandardPromptInput = {
   campusAddress?: string;
   campusPhone: string;
 };
-export type StandardPromptOverlayData = {
-  mainTitle: string;
-  subtitle?: string;
-  campusName: string;
-  campusAddress?: string;
-  campusPhone: string;
-};
-export type BuildStandardPromptResult = {
-  prompt: string;
-  overlayData: StandardPromptOverlayData;
-  templateMeta: { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey };
-};
+export type StandardPromptOverlayData = { mainTitle: string; subtitle?: string; campusName: string; campusAddress?: string; campusPhone: string };
+export type BuildStandardPromptResult = { prompt: string; overlayData: StandardPromptOverlayData; templateMeta: { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey } };
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
 const TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND";
 const PRODUCT_OUTPUT_TYPE_LABELS: Record<ProductOutputType, string> = {
@@ -57,9 +49,7 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
   const themeTemplate = themeTemplates[input.theme];
   const styleTemplate = styleTemplates[input.style];
   const elementTemplate = elementTemplates[input.element];
-  if (!themeTemplate || !styleTemplate || !elementTemplate) {
-    throw new Error(TEMPLATE_NOT_FOUND);
-  }
+  if (!themeTemplate || !styleTemplate || !elementTemplate) throw new Error(TEMPLATE_NOT_FOUND);
   return {
     prompt: [
       "【输出任务】",
@@ -87,6 +77,8 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
       "【本次设计需求】",
       ...buildDesignDemandPrompt(input),
       "",
+      ...buildDesignFamilyPrompt(input),
+      "",
       "【视觉转译要求】",
       "请从活动内容和画面元素中提炼 2-4 个本次独有视觉记忆点，并把它们转译为构图、符号、空间和光影。",
       "不要所有画面都退回书页、山水、卷轴、品牌曲线和中央留白。只有诗词、国学、名著类活动才强化卷轴、山水、月亮、竹子、古典建筑。",
@@ -111,14 +103,11 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
       baseTemplate.negativePrompt.join("\n"),
     ].join("\n"),
     overlayData,
-    templateMeta: {
-      theme: input.theme,
-      style: input.style,
-      element: input.element,
-    },
+    templateMeta: { theme: input.theme, style: input.style, element: input.element },
   };
 }
 function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
+  const designFamily = getDesignFamily(input.designFamily);
   const promptFields: Partial<StandardDesignBriefPromptFields> = {
     productOutputType: normalizeOptionalText(input.productOutputType) as ProductOutputType | undefined,
     eventBrief: normalizeOptionalText(input.eventBrief),
@@ -128,6 +117,7 @@ function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
   };
   const visualBrief = normalizeOptionalText(input.visualBrief);
   return [
+    `设计家族：${designFamily?.label || "未指定"}`,
     `物料类型：${getProductOutputLabel(promptFields.productOutputType)}`,
     `活动内容：${promptFields.eventBrief || "未填写"}`,
     `风格倾向：${promptFields.styleBrief || "未填写"}`,
@@ -137,6 +127,29 @@ function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
     "请优先根据以上结构化设计需求生成本次背景主视觉。",
     "这些字段用于理解活动、风格、视觉元素和规避方向，不得直接生成文字、标题、Logo、二维码、电话或校区信息。",
   ];
+}
+function buildDesignFamilyPrompt(input: StandardPromptInput): string[] {
+  const family = getDesignFamily(input.designFamily);
+  if (!family) return [];
+  return [
+    "【设计家族方向】",
+    `设计方向：${family.label}`,
+    `适用场景：${family.suitableFor.join("、")}`,
+    `视觉语言：${family.visualLanguage.join("、")}`,
+    `构图规则：${family.compositionRules.join("；")}`,
+    `规避方向：${family.avoid.join("、")}`,
+    `方向说明：${family.prompt}`,
+    "",
+    "请优先使用该设计家族作为本次画面的视觉方向盘。",
+    "它用于拉开不同主题之间的构图、视觉焦点和画面语言差异。",
+    "品牌 VI、硬边界和后期合成规则仍然必须遵守。",
+  ];
+}
+function getDesignFamily(designFamily?: StandardDesignFamilyKey) {
+  if (!designFamily) return undefined;
+  const family = STANDARD_DESIGN_FAMILIES[designFamily];
+  if (!family) throw new Error(TEMPLATE_NOT_FOUND);
+  return family;
 }
 function getProductOutputLabel(productOutputType?: ProductOutputType): string {
   return productOutputType
@@ -148,15 +161,11 @@ function loadTemplate<Template>(
   assertTemplate: (value: unknown) => asserts value is Template,
 ): Template {
   try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(join(process.cwd(), relativePath), "utf8"),
-    );
+    const parsed: unknown = JSON.parse(readFileSync(join(process.cwd(), relativePath), "utf8"));
     assertTemplate(parsed);
     return parsed;
   } catch (error) {
-    if (error instanceof Error && error.message === TEMPLATE_INVALID) {
-      throw error;
-    }
+    if (error instanceof Error && error.message === TEMPLATE_INVALID) throw error;
     throw new Error(TEMPLATE_INVALID);
   }
 }
@@ -166,26 +175,16 @@ function buildOverlayData(input: StandardPromptInput): StandardPromptOverlayData
   const campusPhone = normalizeRequiredText(input.campusPhone);
   const subtitle = normalizeOptionalText(input.subtitle);
   const campusAddress = normalizeOptionalText(input.campusAddress);
-  return {
-    mainTitle,
-    ...(subtitle ? { subtitle } : {}),
-    campusName,
-    ...(campusAddress ? { campusAddress } : {}),
-    campusPhone,
-  };
+  return { mainTitle, ...(subtitle ? { subtitle } : {}), campusName, ...(campusAddress ? { campusAddress } : {}), campusPhone };
 }
 function normalizeRequiredText(value: string): string {
   const normalizedValue = value.trim();
-  if (!normalizedValue) {
-    throw new Error(INVALID_TEMPLATE_INPUT);
-  }
+  if (!normalizedValue) throw new Error(INVALID_TEMPLATE_INPUT);
   return normalizedValue;
 }
 function normalizeOptionalText(value?: string): string | undefined {
   return value?.trim() || undefined;
 }
 function formatColors(colors: Record<string, string>): string {
-  return Object.entries(colors)
-    .map(([name, value]) => `${name} ${value}`)
-    .join("、");
+  return Object.entries(colors).map(([name, value]) => `${name} ${value}`).join("、");
 }

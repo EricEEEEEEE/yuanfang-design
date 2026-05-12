@@ -28,6 +28,7 @@ type StandardTestComposeBody = {
   theme: string;
   style: string;
   element: string;
+  designFamily?: string;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -102,6 +103,7 @@ function isStandardTestComposeBody(
     isRequiredString(value.theme) &&
     isRequiredString(value.style) &&
     isRequiredString(value.element) &&
+    isOptionalString(value.designFamily) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&
