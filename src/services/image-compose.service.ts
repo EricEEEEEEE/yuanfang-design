@@ -22,6 +22,13 @@ const COMPOSE_FAILED = "COMPOSE_FAILED";
 const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1620;
 const OUTPUT_QUALITY = 78;
+const CENTER_TITLE_LOGO_POSITION = { x: 858, y: 48, width: 150 };
+
+type LogoPosition = {
+  x: number;
+  y: number;
+  width: number;
+};
 
 type RenderTextLinesParams = {
   lines: string[];
@@ -47,8 +54,9 @@ export async function composeStandardPoster(
   assertAssetExists(mascotPath);
 
   try {
+    const logoPosition = getLogoPosition(normalizedInput.layoutFamily);
     const logoBuffer = await sharp(readFileSync(logoPath))
-      .resize({ width: BRAND.logoPosition.width })
+      .resize({ width: logoPosition.width })
       .png()
       .toBuffer();
     const mascotBuffer = await sharp(readFileSync(mascotPath))
@@ -66,8 +74,8 @@ export async function composeStandardPoster(
         },
         {
           input: logoBuffer,
-          left: BRAND.logoPosition.x,
-          top: BRAND.logoPosition.y,
+          left: logoPosition.x,
+          top: logoPosition.y,
         },
         {
           input: mascotBuffer,
@@ -360,6 +368,12 @@ function getSupportedLayoutFamily(
   layoutFamily?: StandardLayoutFamilyKey,
 ): "classicTop" | "centerTitle" {
   return layoutFamily === "centerTitle" ? "centerTitle" : "classicTop";
+}
+
+function getLogoPosition(layoutFamily?: StandardLayoutFamilyKey): LogoPosition {
+  return layoutFamily === "centerTitle"
+    ? CENTER_TITLE_LOGO_POSITION
+    : BRAND.logoPosition;
 }
 
 function renderTextLines(params: RenderTextLinesParams): string {
