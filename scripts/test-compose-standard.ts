@@ -7,7 +7,7 @@ import {
 
 const BACKGROUND_IMAGE_PATH = "/tmp/yuanfang-standard-test-2.png";
 const OUTPUT_PATH = "/tmp/yuanfang-composed-test.jpg";
-const TEST_LAYOUT_FAMILY: StandardLayoutFamilyKey = "centerTitle";
+const TEST_LAYOUT_FAMILY: StandardLayoutFamilyKey = "sideTitle";
 const TEST_PROMPT_INPUT: StandardPromptInput = {
   theme: "classicalLiterature",
   style: "chinese",

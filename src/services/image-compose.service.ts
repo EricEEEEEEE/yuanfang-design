@@ -23,6 +23,7 @@ const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1620;
 const OUTPUT_QUALITY = 78;
 const CENTER_TITLE_LOGO_POSITION = { x: 858, y: 48, width: 150 };
+const SIDE_TITLE_LOGO_POSITION = { x: 820, y: 60, width: 170 };
 
 type LogoPosition = {
   x: number;
@@ -117,6 +118,10 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
 function buildTextOverlay(input: ComposeStandardPosterInput): string {
   if (input.layoutFamily === "centerTitle") {
     return buildCenterTitleTextOverlay(input);
+  }
+
+  if (input.layoutFamily === "sideTitle") {
+    return buildSideTitleTextOverlay(input);
   }
 
   return buildClassicTopTextOverlay(input);
@@ -296,6 +301,92 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
 </svg>`;
 }
 
+function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
+  const textStyles = [
+    TYPOGRAPHY.title,
+    TYPOGRAPHY.subtitle,
+    TYPOGRAPHY.campus,
+    TYPOGRAPHY.info,
+    TYPOGRAPHY.phone,
+  ];
+  const mainTitleLines = splitTextByLength(input.mainTitle, 6);
+  const subtitleLines = input.subtitle
+    ? splitTextByLength(input.subtitle, 10)
+    : [];
+  const campusNameLines = splitTextByLength(
+    input.campusName,
+    TYPOGRAPHY.campus.maxCharsPerLine,
+  );
+  const addressLines = input.campusAddress
+    ? splitTextByLength(input.campusAddress, TYPOGRAPHY.info.maxCharsPerLine)
+    : [];
+  const subtitleY = 240 + mainTitleLines.length * TYPOGRAPHY.title.lineHeight + 24;
+  const titlePanelHeight = Math.max(
+    360,
+    164 +
+      mainTitleLines.length * TYPOGRAPHY.title.lineHeight +
+      subtitleLines.length * TYPOGRAPHY.subtitle.lineHeight,
+  );
+  const addressY = 1426 + campusNameLines.length * TYPOGRAPHY.campus.lineHeight + 14;
+  const phoneY = addressLines.length > 0
+    ? addressY + addressLines.length * TYPOGRAPHY.info.lineHeight + 10
+    : addressY;
+  const subtitleText = subtitleLines.length > 0
+    ? renderTextLines({
+        lines: subtitleLines,
+        x: 90,
+        y: subtitleY,
+        lineHeight: TYPOGRAPHY.subtitle.lineHeight,
+        className: "subtitle",
+        letterSpacing: TYPOGRAPHY.subtitle.letterSpacing,
+      })
+    : "";
+  const addressText = addressLines.length > 0
+    ? renderTextLines({
+        lines: addressLines,
+        x: 72,
+        y: addressY,
+        lineHeight: TYPOGRAPHY.info.lineHeight,
+        className: "info",
+        letterSpacing: TYPOGRAPHY.info.letterSpacing,
+      })
+    : "";
+
+  return `
+<svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    ${buildFontFaceCss(textStyles)}
+    ${renderTextStyle("title", TYPOGRAPHY.title)}
+    ${renderTextStyle("subtitle", TYPOGRAPHY.subtitle)}
+    ${renderTextStyle("campus", TYPOGRAPHY.campus)}
+    ${renderTextStyle("info", TYPOGRAPHY.info)}
+    ${renderTextStyle("phone", TYPOGRAPHY.phone)}
+  </style>
+  <rect x="54" y="150" width="420" height="${titlePanelHeight}" rx="30" fill="#FFFFFF" opacity="0.80"/>
+  <rect x="48" y="1360" width="984" height="184" rx="28" fill="#FFFFFF" opacity="0.86"/>
+  <rect x="48" y="1360" width="10" height="184" rx="5" fill="${BRAND.colors.orange}"/>
+  ${renderTextLines({
+    lines: mainTitleLines,
+    x: 90,
+    y: 240,
+    lineHeight: TYPOGRAPHY.title.lineHeight,
+    className: "title",
+    letterSpacing: TYPOGRAPHY.title.letterSpacing,
+  })}
+  ${subtitleText}
+  ${renderTextLines({
+    lines: campusNameLines,
+    x: 72,
+    y: 1426,
+    lineHeight: TYPOGRAPHY.campus.lineHeight,
+    className: "campus",
+    letterSpacing: TYPOGRAPHY.campus.letterSpacing,
+  })}
+  ${addressText}
+  <text x="72" y="${phoneY}" class="phone" letter-spacing="${TYPOGRAPHY.phone.letterSpacing}">${escapeXml(input.campusPhone)}</text>
+</svg>`;
+}
+
 function buildFontFaceCss(styles: TextStyleConfig[]): string {
   const seenFontPaths = new Set<string>();
 
@@ -366,14 +457,24 @@ function splitTextByLength(text: string, maxLength: number): string[] {
 
 function getSupportedLayoutFamily(
   layoutFamily?: StandardLayoutFamilyKey,
-): "classicTop" | "centerTitle" {
-  return layoutFamily === "centerTitle" ? "centerTitle" : "classicTop";
+): "classicTop" | "centerTitle" | "sideTitle" {
+  if (layoutFamily === "centerTitle" || layoutFamily === "sideTitle") {
+    return layoutFamily;
+  }
+
+  return "classicTop";
 }
 
 function getLogoPosition(layoutFamily?: StandardLayoutFamilyKey): LogoPosition {
-  return layoutFamily === "centerTitle"
-    ? CENTER_TITLE_LOGO_POSITION
-    : BRAND.logoPosition;
+  if (layoutFamily === "centerTitle") {
+    return CENTER_TITLE_LOGO_POSITION;
+  }
+
+  if (layoutFamily === "sideTitle") {
+    return SIDE_TITLE_LOGO_POSITION;
+  }
+
+  return BRAND.logoPosition;
 }
 
 function renderTextLines(params: RenderTextLinesParams): string {
