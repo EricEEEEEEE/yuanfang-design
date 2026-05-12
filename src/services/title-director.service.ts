@@ -1,7 +1,21 @@
 import OpenAI from "openai";
 import { STANDARD_FONT_LIBRARY, type StandardFontKey } from "@/config/font-library";
 import { MODELS } from "@/config/models";
-import { TITLE_DIRECTOR_PRESETS, type TitleDecorationKey, type TitleDirectorDecision, type TitleEmphasisMode, type TitleLineBreakMode, type TitlePlacementKey, type TitleReadabilitySupport, type TitleScaleLevel } from "@/config/title-director";
+import {
+  TITLE_DIRECTOR_PRESETS,
+  type TitleCompositionMode,
+  type TitleDecorationIntent,
+  type TitleDecorationKey,
+  type TitleDirectorDecision,
+  type TitleEmphasisMode,
+  type TitleEmphasisTarget,
+  type TitleLineBreakMode,
+  type TitleOrientation,
+  type TitlePlacementKey,
+  type TitleReadabilitySupport,
+  type TitleScaleIntensity,
+  type TitleScaleLevel,
+} from "@/config/title-director";
 import { STANDARD_TITLE_ART_STYLES, type StandardTitleArtStyleKey } from "@/config/title-art-styles";
 
 export type ResolveTitleDirectorInput = {
@@ -27,10 +41,15 @@ export type ResolveTitleDirectorResult = {
 };
 
 const PLACEMENTS: readonly TitlePlacementKey[] = ["topCenter", "topLeft", "centerHero", "leftBlock", "rightBlock", "bottomHero", "editorialTop", "sealTitle"];
+const ORIENTATIONS: readonly TitleOrientation[] = ["horizontal", "vertical", "diagonal", "stacked"];
+const COMPOSITION_MODES: readonly TitleCompositionMode[] = ["heroCenter", "topBanner", "leftBlock", "rightVertical", "leftVertical", "diagonalDynamic", "editorialBlock", "sealBadge"];
 const SCALES: readonly TitleScaleLevel[] = ["normal", "large", "hero"];
 const LINE_BREAK_MODES: readonly TitleLineBreakMode[] = ["auto", "balanced", "shortLines", "singleLinePreferred"];
 const EMPHASIS_MODES: readonly TitleEmphasisMode[] = ["solidHero", "outlinedReadable", "editorial", "campaignImpact", "chineseSeal", "cleanReadable"];
+const EMPHASIS_TARGETS: readonly TitleEmphasisTarget[] = ["allTitle", "firstWord", "keyword", "titleAndSubtitle"];
+const SCALE_INTENSITIES: readonly TitleScaleIntensity[] = ["normal", "large", "huge"];
 const READABILITY: readonly TitleReadabilitySupport[] = ["none", "lightShadow", "shadowAndStroke", "softGlow", "subtleOverlay"];
+const DECORATION_INTENTS: readonly TitleDecorationIntent[] = ["none", "stage", "chinese", "campaign", "literary", "playful"];
 const DECORATIONS: readonly TitleDecorationKey[] = ["none", "stageLight", "smallStars", "goldLine", "sealStamp", "paperTag", "bookMark", "campaignLabel", "growthArrow"];
 const FONT_KEYS = Object.keys(STANDARD_FONT_LIBRARY) as StandardFontKey[];
 const TITLE_ART_KEYS = Object.keys(STANDARD_TITLE_ART_STYLES) as StandardTitleArtStyleKey[];
@@ -82,12 +101,17 @@ function buildSystemPrompt(): string {
     "必须只输出 JSON，不要 Markdown，不要解释。",
     "背景观察要求：必须判断顶部是否过暗或过复杂、中部是否有聚光或低复杂度区域、左右是否有主体或留白、是否有 Logo 区域需要避开、主标题是否需要成为画面主角。",
     `placement 只能选：${PLACEMENTS.join(" / ")}`,
+    `orientation 只能选：${ORIENTATIONS.join(" / ")}`,
+    `compositionMode 只能选：${COMPOSITION_MODES.join(" / ")}`,
     `fontKey 只能选：${FONT_KEYS.join(" / ")}`,
     `titleArtStyle 只能选：${TITLE_ART_KEYS.join(" / ")}`,
     `titleScale 和 subtitleScale 只能选：${SCALES.join(" / ")}`,
     `lineBreakMode 只能选：${LINE_BREAK_MODES.join(" / ")}`,
     `emphasisMode 只能选：${EMPHASIS_MODES.join(" / ")}`,
+    `emphasisTarget 只能选：${EMPHASIS_TARGETS.join(" / ")}`,
+    `scaleIntensity 只能选：${SCALE_INTENSITIES.join(" / ")}`,
     `readabilitySupport 只能选：${READABILITY.join(" / ")}`,
+    `decorationIntent 只能选：${DECORATION_INTENTS.join(" / ")}`,
     `decorations 只能从这些值组成数组：${DECORATIONS.join(" / ")}`,
   ].join("\n");
 }
@@ -111,18 +135,25 @@ function buildUserPrompt(input: ResolveTitleDirectorInput): string {
     "【规则基线】",
     `推荐预设：${presetKey}`,
     `推荐 placement: ${baseline.placement}`,
+    `推荐 orientation: ${baseline.orientation}`,
+    `推荐 compositionMode: ${baseline.compositionMode}`,
     `推荐 fontKey: ${baseline.fontKey}`,
     `推荐 titleArtStyle: ${baseline.titleArtStyle}`,
     `推荐 titleScale: ${baseline.titleScale}`,
     `推荐 subtitleScale: ${baseline.subtitleScale}`,
     `推荐 emphasisMode: ${baseline.emphasisMode}`,
+    `推荐 emphasisTarget: ${baseline.emphasisTarget}`,
+    `推荐 scaleIntensity: ${baseline.scaleIntensity}`,
     `推荐 readabilitySupport: ${baseline.readabilitySupport}`,
+    `推荐 decorationIntent: ${baseline.decorationIntent}`,
     `推荐 decorations: ${baseline.decorations.join(", ")}`,
     "规则基线是默认正确答案。AI 只有在背景图明显不适合规则基线时才可以偏离；如果偏离 fontKey / titleArtStyle / emphasisMode，reason 必须明确说明背景原因。",
     "对 achievementShowcase / businessLaunch，默认不应返回 cleanBrand，除非背景极其干净且不需要舞台感；对 achievementShowcase，默认 decorations 应偏 stageLight / smallStars，不要用 goldLine，除非 visualDetails 明确包含金线、国风、典礼金色主题。",
     "placement 不能只为了安全选择 topCenter；必须根据背景的视觉重心和可读区域选择。",
+    "reason 必须说明为什么选择横排 / 竖排 / 斜排 / 错落排；如果选择 horizontal，必须说明为什么横排比竖排或斜排更适合当前背景。",
+    "如果背景中部大面积空白且适合艺术字，不能机械选择 topBanner；如果背景更适合中文竖排，应选择 vertical，并说明原因。",
     "reason 必须说明标题为什么放在这个区域，例如避开顶部灯架、利用中部聚光、避开主体人物、背景复杂度较低等，不能只写泛泛的专业可信、突出主标题。",
-    "请只输出 JSON，格式包含 placement、fontKey、titleArtStyle、titleScale、subtitleScale、lineBreakMode、emphasisMode、readabilitySupport、decorations、reason。",
+    "请只输出 JSON，格式包含 placement、orientation、compositionMode、fontKey、titleArtStyle、titleScale、subtitleScale、lineBreakMode、emphasisMode、emphasisTarget、scaleIntensity、readabilitySupport、decorationIntent、decorations、reason。",
   ].join("\n");
 }
 
@@ -146,13 +177,18 @@ function validateDecision(value: unknown): TitleDirectorDecision | undefined {
 
   if (
     !isOneOf(value.placement, PLACEMENTS) ||
+    !isOneOf(value.orientation, ORIENTATIONS) ||
+    !isOneOf(value.compositionMode, COMPOSITION_MODES) ||
     !isOneOf(value.fontKey, FONT_KEYS) ||
     !isOneOf(value.titleArtStyle, TITLE_ART_KEYS) ||
     !isOneOf(value.titleScale, SCALES) ||
     !isOneOf(value.subtitleScale, SCALES) ||
     !isOneOf(value.lineBreakMode, LINE_BREAK_MODES) ||
     !isOneOf(value.emphasisMode, EMPHASIS_MODES) ||
+    !isOneOf(value.emphasisTarget, EMPHASIS_TARGETS) ||
+    !isOneOf(value.scaleIntensity, SCALE_INTENSITIES) ||
     !isOneOf(value.readabilitySupport, READABILITY) ||
+    !isOneOf(value.decorationIntent, DECORATION_INTENTS) ||
     !Array.isArray(value.decorations) ||
     !value.decorations.every((item) => isOneOf(item, DECORATIONS)) ||
     typeof value.reason !== "string" ||
@@ -161,7 +197,7 @@ function validateDecision(value: unknown): TitleDirectorDecision | undefined {
     return undefined;
   }
 
-  return { placement: value.placement, fontKey: value.fontKey, titleArtStyle: value.titleArtStyle, titleScale: value.titleScale, subtitleScale: value.subtitleScale, lineBreakMode: value.lineBreakMode, emphasisMode: value.emphasisMode, readabilitySupport: value.readabilitySupport, decorations: value.decorations, reason: value.reason.trim() };
+  return { placement: value.placement, orientation: value.orientation, compositionMode: value.compositionMode, fontKey: value.fontKey, titleArtStyle: value.titleArtStyle, titleScale: value.titleScale, subtitleScale: value.subtitleScale, lineBreakMode: value.lineBreakMode, emphasisMode: value.emphasisMode, emphasisTarget: value.emphasisTarget, scaleIntensity: value.scaleIntensity, readabilitySupport: value.readabilitySupport, decorationIntent: value.decorationIntent, decorations: value.decorations, reason: value.reason.trim() };
 }
 
 function fallback(
