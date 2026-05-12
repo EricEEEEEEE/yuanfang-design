@@ -43,18 +43,9 @@ export type BuildStandardPromptResult = {
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
 const TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND";
 const PRODUCT_OUTPUT_TYPE_LABELS: Record<ProductOutputType, string> = {
-  mainVisual: "活动主视觉",
-  socialPoster: "朋友圈海报",
-  noticeCard: "通知卡片",
-  wechatHeader: "公众号头图",
-  courseIntro: "课程介绍图",
-  longPoster: "招生长图",
-  eventSchedule: "活动流程图",
-  checkInCard: "打卡图",
-  workShowcase: "作品展示图",
-  displayBoard: "展板/易拉宝",
-  videoCover: "视频封面",
-  xiaohongshuCover: "小红书封面",
+  mainVisual: "活动主视觉", socialPoster: "朋友圈海报", noticeCard: "通知卡片", wechatHeader: "公众号头图",
+  courseIntro: "课程介绍图", longPoster: "招生长图", eventSchedule: "活动流程图", checkInCard: "打卡图",
+  workShowcase: "作品展示图", displayBoard: "展板/易拉宝", videoCover: "视频封面", xiaohongshuCover: "小红书封面",
 };
 const baseTemplate = loadTemplate<BaseTemplate>("templates/_base.json", assertBaseTemplate);
 const brandRules = loadTemplate<BrandRulesTemplate>("templates/_brand-rules.json", assertBrandRulesTemplate);
@@ -85,6 +76,13 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
       `Logo 规则：${brandRules.logoRules.join("；")}`,
       `吉祥物规则：${brandRules.mascotRules.join("；")}`,
       baseTemplate.basePrompt,
+      "",
+      "【设计方法论】",
+      "信息先于装饰：标题区低复杂度，主题视觉区有记忆点，辅助区保持克制，画面必须帮助家长快速理解活动价值。",
+      "目标先于风格：先围绕本次物料的传播目标组织视觉，再选择风格、符号和构图。",
+      "克制不等于空：留白要有层次、材质、光感或浅色结构，不要纯空白模板。",
+      "一题一语汇：不同活动要有不同主题符号和构图记忆点，品牌一致不等于模板一致。",
+      "可批量落地：结果必须适合校区直接传播，兼顾美观、信息清晰、品牌一致、复用效率和低维护成本，不要实验性艺术图。",
       "",
       "【本次设计需求】",
       ...buildDesignDemandPrompt(input),
