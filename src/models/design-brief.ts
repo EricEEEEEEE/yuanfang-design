@@ -26,17 +26,17 @@ export type StandardDesignBriefInput = {
   avoidNotes?: string;
   mainTitle: string;
   subtitle?: string;
-  campusName: string;
+  campusName?: string;
   campusAddress?: string;
-  campusPhone: string;
+  campusPhone?: string;
 };
 
 export type StandardDesignBriefOverlayData = {
   mainTitle: string;
   subtitle?: string;
-  campusName: string;
+  campusName?: string;
   campusAddress?: string;
-  campusPhone: string;
+  campusPhone?: string;
 };
 
 export type StandardDesignBriefPromptFields = {

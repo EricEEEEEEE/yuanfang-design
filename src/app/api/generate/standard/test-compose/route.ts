@@ -40,9 +40,9 @@ type StandardTestComposeBody = {
   visualBrief?: string;
   mainTitle: string;
   subtitle?: string;
-  campusName: string;
+  campusName?: string;
   campusAddress?: string;
-  campusPhone: string;
+  campusPhone?: string;
 };
 
 export async function POST(request: Request): Promise<Response> {
@@ -70,6 +70,7 @@ export async function POST(request: Request): Promise<Response> {
       backgroundImagePath: backgroundPath,
       outputPath,
       layoutFamily: body.layoutFamily as StandardLayoutFamilyKey | undefined,
+      displayPolicy: body.displayPolicy,
       ...promptResult.overlayData,
     });
 
@@ -117,8 +118,8 @@ function isStandardTestComposeBody(
     isOptionalString(value.avoidNotes) &&
     isOptionalString(value.visualBrief) &&
     isRequiredString(value.mainTitle) &&
-    isRequiredString(value.campusName) &&
-    isRequiredString(value.campusPhone) &&
+    isOptionalString(value.campusName) &&
+    isOptionalString(value.campusPhone) &&
     isOptionalString(value.subtitle) &&
     isOptionalString(value.campusAddress)
   );

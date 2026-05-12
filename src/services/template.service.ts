@@ -7,8 +7,8 @@ import type { StandardElementKey, StandardStyleKey, StandardThemeKey } from "@/c
 import type { ProductOutputType, StandardDesignBriefPromptFields } from "@/models/design-brief";
 import { assertBaseTemplate, assertBrandRulesTemplate, assertPromptFragmentMap, TEMPLATE_INVALID, type BaseTemplate, type BrandRulesTemplate, type PromptFragmentMap } from "@/utils/template-validation";
 
-export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; displayPolicy?: string; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName: string; campusAddress?: string; campusPhone: string };
-export type StandardPromptOverlayData = { mainTitle: string; subtitle?: string; campusName: string; campusAddress?: string; campusPhone: string };
+export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; displayPolicy?: string; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
+export type StandardPromptOverlayData = { mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
 export type BuildStandardPromptResult = { prompt: string; overlayData: StandardPromptOverlayData; templateMeta: { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey } };
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
 const TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND";
@@ -176,11 +176,11 @@ function loadTemplate<Template>(
 }
 function buildOverlayData(input: StandardPromptInput): StandardPromptOverlayData {
   const mainTitle = normalizeRequiredText(input.mainTitle);
-  const campusName = normalizeRequiredText(input.campusName);
-  const campusPhone = normalizeRequiredText(input.campusPhone);
   const subtitle = normalizeOptionalText(input.subtitle);
+  const campusName = normalizeOptionalText(input.campusName);
   const campusAddress = normalizeOptionalText(input.campusAddress);
-  return { mainTitle, ...(subtitle ? { subtitle } : {}), campusName, ...(campusAddress ? { campusAddress } : {}), campusPhone };
+  const campusPhone = normalizeOptionalText(input.campusPhone);
+  return { mainTitle, ...(subtitle ? { subtitle } : {}), ...(campusName ? { campusName } : {}), ...(campusAddress ? { campusAddress } : {}), ...(campusPhone ? { campusPhone } : {}) };
 }
 function normalizeRequiredText(value: string): string {
   const normalizedValue = value.trim();

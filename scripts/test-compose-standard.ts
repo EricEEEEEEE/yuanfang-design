@@ -25,9 +25,6 @@ const TEST_PROMPT_INPUT: StandardPromptInput = {
   visualBrief: "国学少年说、四大名著、少年国学、古典文学启蒙",
   mainTitle: "暑假文学表达体验课",
   subtitle: "让孩子在阅读中学会表达",
-  campusName: "远方文学青山校区",
-  campusAddress: "包头市青山区测试地址",
-  campusPhone: "13800000000",
 };
 
 async function main(): Promise<void> {
@@ -36,6 +33,7 @@ async function main(): Promise<void> {
     backgroundImagePath: BACKGROUND_IMAGE_PATH,
     outputPath: OUTPUT_PATH,
     layoutFamily: TEST_LAYOUT_FAMILY,
+    displayPolicy: TEST_PROMPT_INPUT.displayPolicy,
     ...promptResult.overlayData,
   });
 

@@ -26,9 +26,9 @@ type PreviewPromptBody = {
   visualBrief?: string;
   mainTitle: string;
   subtitle?: string;
-  campusName: string;
+  campusName?: string;
   campusAddress?: string;
-  campusPhone: string;
+  campusPhone?: string;
 };
 
 export async function POST(request: Request): Promise<Response> {
@@ -74,8 +74,8 @@ function isPreviewPromptBody(value: unknown): value is PreviewPromptBody {
     isOptionalString(value.avoidNotes) &&
     isOptionalString(value.visualBrief) &&
     isRequiredString(value.mainTitle) &&
-    isRequiredString(value.campusName) &&
-    isRequiredString(value.campusPhone) &&
+    isOptionalString(value.campusName) &&
+    isOptionalString(value.campusPhone) &&
     isOptionalString(value.subtitle) &&
     isOptionalString(value.campusAddress)
   );
