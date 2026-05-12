@@ -13,6 +13,8 @@ const TEST_PROMPT_INPUT: StandardPromptInput = {
   style: "chinese",
   element: "classicalPoetry",
   designFamily: "modernChinese",
+  layoutFamily: TEST_LAYOUT_FAMILY,
+  displayPolicy: "titleOnlyDefault",
   productOutputType: "mainVisual",
   eventBrief: "四大名著少年国学活动",
   styleBrief: "现代国风、偏商务教育主视觉、红金青绿、不要低幼",

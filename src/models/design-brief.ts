@@ -18,6 +18,7 @@ export type ProductOutputType =
 export type StandardDesignBriefInput = {
   designFamily?: StandardDesignFamilyKey;
   layoutFamily?: StandardLayoutFamilyKey;
+  displayPolicy?: string;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
@@ -41,6 +42,7 @@ export type StandardDesignBriefOverlayData = {
 export type StandardDesignBriefPromptFields = {
   designFamily?: StandardDesignFamilyKey;
   layoutFamily?: StandardLayoutFamilyKey;
+  displayPolicy?: string;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
