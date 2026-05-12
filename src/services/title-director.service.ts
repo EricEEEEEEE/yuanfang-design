@@ -80,6 +80,7 @@ function buildSystemPrompt(): string {
     "你不能生成图片，不能生成中文标题文字，也不能修改主标题或副标题内容。",
     "你只能根据背景图和结构化 brief，选择 Sharp 后期标题合成参数。",
     "必须只输出 JSON，不要 Markdown，不要解释。",
+    "背景观察要求：必须判断顶部是否过暗或过复杂、中部是否有聚光或低复杂度区域、左右是否有主体或留白、是否有 Logo 区域需要避开、主标题是否需要成为画面主角。",
     `placement 只能选：${PLACEMENTS.join(" / ")}`,
     `fontKey 只能选：${FONT_KEYS.join(" / ")}`,
     `titleArtStyle 只能选：${TITLE_ART_KEYS.join(" / ")}`,
@@ -92,6 +93,8 @@ function buildSystemPrompt(): string {
 }
 
 function buildUserPrompt(input: ResolveTitleDirectorInput): string {
+  const presetKey = getFallbackPresetKey(input.titleDirectorPreset, input.designFamily), baseline = TITLE_DIRECTOR_PRESETS[presetKey].decision;
+
   return [
     `主标题：${input.mainTitle}`,
     `副标题：${input.subtitle || "未填写"}`,
@@ -105,6 +108,20 @@ function buildUserPrompt(input: ResolveTitleDirectorInput): string {
     `风格倾向：${input.styleBrief || "未填写"}`,
     `画面元素：${input.visualDetails || "未填写"}`,
     `规避内容：${input.avoidNotes || "未填写"}`,
+    "【规则基线】",
+    `推荐预设：${presetKey}`,
+    `推荐 placement: ${baseline.placement}`,
+    `推荐 fontKey: ${baseline.fontKey}`,
+    `推荐 titleArtStyle: ${baseline.titleArtStyle}`,
+    `推荐 titleScale: ${baseline.titleScale}`,
+    `推荐 subtitleScale: ${baseline.subtitleScale}`,
+    `推荐 emphasisMode: ${baseline.emphasisMode}`,
+    `推荐 readabilitySupport: ${baseline.readabilitySupport}`,
+    `推荐 decorations: ${baseline.decorations.join(", ")}`,
+    "规则基线是默认正确答案。AI 只有在背景图明显不适合规则基线时才可以偏离；如果偏离 fontKey / titleArtStyle / emphasisMode，reason 必须明确说明背景原因。",
+    "对 achievementShowcase / businessLaunch，默认不应返回 cleanBrand，除非背景极其干净且不需要舞台感；对 achievementShowcase，默认 decorations 应偏 stageLight / smallStars，不要用 goldLine，除非 visualDetails 明确包含金线、国风、典礼金色主题。",
+    "placement 不能只为了安全选择 topCenter；必须根据背景的视觉重心和可读区域选择。",
+    "reason 必须说明标题为什么放在这个区域，例如避开顶部灯架、利用中部聚光、避开主体人物、背景复杂度较低等，不能只写泛泛的专业可信、突出主标题。",
     "请只输出 JSON，格式包含 placement、fontKey、titleArtStyle、titleScale、subtitleScale、lineBreakMode、emphasisMode、readabilitySupport、decorations、reason。",
   ].join("\n");
 }

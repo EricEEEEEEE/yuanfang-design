@@ -17,6 +17,7 @@ async function main(): Promise<void> {
     designFamily: "achievementShowcase",
     layoutFamily: "centerTitle",
     displayPolicy: "titleOnlyDefault",
+    titleDirectorPreset: "stageHero",
     productOutputType: "mainVisual",
     eventBrief:
       "这是一次学期成长汇报课，孩子会展示阅读、写作、表达和课堂展示方面的成长。",
