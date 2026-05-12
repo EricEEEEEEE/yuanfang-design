@@ -22,6 +22,7 @@ export type StandardDesignBriefInput = {
   displayPolicy?: string;
   showMascot?: boolean;
   titleArtStyle?: StandardTitleArtStyleKey;
+  titleDirectorPreset?: string;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
@@ -48,6 +49,7 @@ export type StandardDesignBriefPromptFields = {
   displayPolicy?: string;
   showMascot?: boolean;
   titleArtStyle?: StandardTitleArtStyleKey;
+  titleDirectorPreset?: string;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;

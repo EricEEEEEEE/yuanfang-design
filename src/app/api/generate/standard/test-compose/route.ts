@@ -35,6 +35,7 @@ type StandardTestComposeBody = {
   displayPolicy?: string;
   showMascot?: boolean;
   titleArtStyle?: string;
+  titleDirectorPreset?: string;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -76,6 +77,8 @@ export async function POST(request: Request): Promise<Response> {
       displayPolicy: body.displayPolicy,
       showMascot: body.showMascot === true,
       titleArtStyle: body.titleArtStyle as StandardTitleArtStyleKey | undefined,
+      titleDirectorPreset: body.titleDirectorPreset,
+      designFamily: body.designFamily,
       ...promptResult.overlayData,
     });
 
@@ -118,6 +121,7 @@ function isStandardTestComposeBody(
     isOptionalString(value.displayPolicy) &&
     isOptionalBoolean(value.showMascot) &&
     isOptionalString(value.titleArtStyle) &&
+    isOptionalString(value.titleDirectorPreset) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&

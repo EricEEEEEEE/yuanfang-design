@@ -11,6 +11,13 @@ import {
 import { STANDARD_FONT_LIBRARY } from "@/config/font-library";
 import type { StandardLayoutFamilyKey } from "@/config/layout-families";
 import {
+  TITLE_DIRECTOR_PRESETS,
+  type TitleDirectorDecision,
+  type TitleLineBreakMode,
+  type TitlePlacementKey,
+  type TitleScaleLevel,
+} from "@/config/title-director";
+import {
   STANDARD_TITLE_ART_STYLES,
   type StandardTitleArtStyle,
   type StandardTitleArtStyleKey,
@@ -29,6 +36,8 @@ export type ComposeStandardPosterInput = {
   displayPolicy?: string;
   showMascot?: boolean;
   titleArtStyle?: StandardTitleArtStyleKey;
+  titleDirectorPreset?: string;
+  designFamily?: string;
 };
 
 const COMPOSE_INPUT_INVALID = "COMPOSE_INPUT_INVALID";
@@ -79,6 +88,12 @@ type TextStyleWithEffects = TextStyleConfig &
 type TitleArtTextStyles = {
   title: TextStyleWithEffects;
   subtitle: TextStyleWithEffects;
+};
+
+type TitlePlacementConfig = {
+  x: number;
+  y: number;
+  textAnchor?: "start" | "middle";
 };
 
 export async function composeStandardPoster(
@@ -155,6 +170,8 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
   const displayPolicy = getDisplayPolicy(input.displayPolicy).key;
   const showMascot = input.showMascot === true;
   const titleArtStyle = getSupportedTitleArtStyle(input.titleArtStyle);
+  const titleDirectorPreset = normalizeOptionalText(input.titleDirectorPreset);
+  const designFamily = normalizeOptionalText(input.designFamily);
 
   return {
     backgroundImagePath,
@@ -168,6 +185,8 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
     displayPolicy,
     showMascot,
     titleArtStyle,
+    ...(titleDirectorPreset ? { titleDirectorPreset } : {}),
+    ...(designFamily ? { designFamily } : {}),
   };
 }
 
@@ -184,7 +203,16 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
 }
 
 function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
-  const titleArtTextStyles = buildTitleArtTextStyles(input.titleArtStyle);
+  const titleDirectorDecision = getTitleDirectorDecision(input);
+  const titlePlacement = getTitlePlacementConfig(
+    "topLeft",
+    "topLeft",
+  );
+  const titleArtTextStyles = buildTitleArtTextStyles(
+    titleDirectorDecision.titleArtStyle,
+    titleDirectorDecision.fontKey,
+    titleDirectorDecision,
+  );
   const textStyles = [
     titleArtTextStyles.title,
     titleArtTextStyles.subtitle,
@@ -195,20 +223,32 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
   const { policy } = getDisplayPolicy(input.displayPolicy);
   const mainTitleLines = splitTextByLength(
     input.mainTitle,
-    titleArtTextStyles.title.maxCharsPerLine,
+    getTitleMaxCharsPerLine(
+      titleArtTextStyles.title.maxCharsPerLine,
+      titleDirectorDecision.lineBreakMode,
+      titlePlacement,
+    ),
   );
   const subtitleLines = input.subtitle
-    ? splitTextByLength(input.subtitle, titleArtTextStyles.subtitle.maxCharsPerLine)
+    ? splitTextByLength(
+        input.subtitle,
+        getSubtitleMaxCharsPerLine(
+          titleArtTextStyles.subtitle.maxCharsPerLine,
+          titleDirectorDecision.lineBreakMode,
+          titlePlacement,
+        ),
+      )
     : [];
-  const subtitleY = 174 + mainTitleLines.length * titleArtTextStyles.title.lineHeight;
+  const subtitleY = titlePlacement.y + mainTitleLines.length * titleArtTextStyles.title.lineHeight;
   const subtitleText = subtitleLines.length > 0
     ? renderTitleArtTextLines({
         lines: subtitleLines,
-        x: 72,
+        x: titlePlacement.x,
         y: subtitleY,
         lineHeight: titleArtTextStyles.subtitle.lineHeight,
         className: "subtitle",
         letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
+        textAnchor: titlePlacement.textAnchor,
       })
     : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
@@ -238,18 +278,28 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
   ${campusInfoOverlay}
   ${renderTitleArtTextLines({
     lines: mainTitleLines,
-    x: 72,
-    y: 174,
+    x: titlePlacement.x,
+    y: titlePlacement.y,
     lineHeight: titleArtTextStyles.title.lineHeight,
     className: "title",
     letterSpacing: titleArtTextStyles.title.letterSpacing,
+    textAnchor: titlePlacement.textAnchor,
   })}
   ${subtitleText}
 </svg>`;
 }
 
 function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string {
-  const titleArtTextStyles = buildTitleArtTextStyles(input.titleArtStyle);
+  const titleDirectorDecision = getTitleDirectorDecision(input);
+  const titlePlacement = getTitlePlacementConfig(
+    titleDirectorDecision.placement,
+    "topCenter",
+  );
+  const titleArtTextStyles = buildTitleArtTextStyles(
+    titleDirectorDecision.titleArtStyle,
+    titleDirectorDecision.fontKey,
+    titleDirectorDecision,
+  );
   const textStyles = [
     titleArtTextStyles.title,
     titleArtTextStyles.subtitle,
@@ -260,12 +310,23 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
   const { policy } = getDisplayPolicy(input.displayPolicy);
   const mainTitleLines = splitTextByLength(
     input.mainTitle,
-    titleArtTextStyles.title.maxCharsPerLine,
+    getTitleMaxCharsPerLine(
+      titleArtTextStyles.title.maxCharsPerLine,
+      titleDirectorDecision.lineBreakMode,
+      titlePlacement,
+    ),
   );
   const subtitleLines = input.subtitle
-    ? splitTextByLength(input.subtitle, titleArtTextStyles.subtitle.maxCharsPerLine)
+    ? splitTextByLength(
+        input.subtitle,
+        getSubtitleMaxCharsPerLine(
+          titleArtTextStyles.subtitle.maxCharsPerLine,
+          titleDirectorDecision.lineBreakMode,
+          titlePlacement,
+        ),
+      )
     : [];
-  const subtitleY = 250 + (mainTitleLines.length - 1) * titleArtTextStyles.title.lineHeight;
+  const subtitleY = titlePlacement.y + mainTitleLines.length * titleArtTextStyles.title.lineHeight - 28;
   const titlePanelHeight = Math.max(
     210,
     96 +
@@ -275,12 +336,12 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
   const subtitleText = subtitleLines.length > 0
     ? renderTitleArtTextLines({
         lines: subtitleLines,
-        x: 540,
+        x: titlePlacement.x,
         y: subtitleY,
         lineHeight: titleArtTextStyles.subtitle.lineHeight,
         className: "subtitle",
         letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
-        textAnchor: "middle",
+        textAnchor: titlePlacement.textAnchor,
       })
     : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
@@ -310,19 +371,28 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
   ${campusInfoOverlay}
   ${renderTitleArtTextLines({
     lines: mainTitleLines,
-    x: 540,
-    y: 195,
+    x: titlePlacement.x,
+    y: titlePlacement.y,
     lineHeight: titleArtTextStyles.title.lineHeight,
     className: "title",
     letterSpacing: titleArtTextStyles.title.letterSpacing,
-    textAnchor: "middle",
+    textAnchor: titlePlacement.textAnchor,
   })}
   ${subtitleText}
 </svg>`;
 }
 
 function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
-  const titleArtTextStyles = buildTitleArtTextStyles(input.titleArtStyle);
+  const titleDirectorDecision = getTitleDirectorDecision(input);
+  const titlePlacement = getTitlePlacementConfig(
+    "leftBlock",
+    "leftBlock",
+  );
+  const titleArtTextStyles = buildTitleArtTextStyles(
+    titleDirectorDecision.titleArtStyle,
+    titleDirectorDecision.fontKey,
+    titleDirectorDecision,
+  );
   const textStyles = [
     titleArtTextStyles.title,
     titleArtTextStyles.subtitle,
@@ -331,11 +401,25 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
     TYPOGRAPHY.phone,
   ];
   const { policy } = getDisplayPolicy(input.displayPolicy);
-  const mainTitleLines = splitTextByLength(input.mainTitle, 6);
+  const mainTitleLines = splitTextByLength(
+    input.mainTitle,
+    getTitleMaxCharsPerLine(
+      titleArtTextStyles.title.maxCharsPerLine,
+      titleDirectorDecision.lineBreakMode,
+      titlePlacement,
+    ),
+  );
   const subtitleLines = input.subtitle
-    ? splitTextByLength(input.subtitle, 10)
+    ? splitTextByLength(
+        input.subtitle,
+        getSubtitleMaxCharsPerLine(
+          titleArtTextStyles.subtitle.maxCharsPerLine,
+          titleDirectorDecision.lineBreakMode,
+          titlePlacement,
+        ),
+      )
     : [];
-  const subtitleY = 240 + mainTitleLines.length * titleArtTextStyles.title.lineHeight + 24;
+  const subtitleY = titlePlacement.y + mainTitleLines.length * titleArtTextStyles.title.lineHeight + 24;
   const titlePanelHeight = Math.max(
     360,
     164 +
@@ -345,11 +429,12 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
   const subtitleText = subtitleLines.length > 0
     ? renderTitleArtTextLines({
         lines: subtitleLines,
-        x: 90,
+        x: titlePlacement.x,
         y: subtitleY,
         lineHeight: titleArtTextStyles.subtitle.lineHeight,
         className: "subtitle",
         letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
+        textAnchor: titlePlacement.textAnchor,
       })
     : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
@@ -379,11 +464,12 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
   ${campusInfoOverlay}
   ${renderTitleArtTextLines({
     lines: mainTitleLines,
-    x: 90,
-    y: 240,
+    x: titlePlacement.x,
+    y: titlePlacement.y,
     lineHeight: titleArtTextStyles.title.lineHeight,
     className: "title",
     letterSpacing: titleArtTextStyles.title.letterSpacing,
+    textAnchor: titlePlacement.textAnchor,
   })}
   ${subtitleText}
 </svg>`;
@@ -443,18 +529,24 @@ function getFontFormat(filePath: string): string {
 }
 
 function buildTitleArtTextStyles(
-  titleArtStyle?: StandardTitleArtStyleKey,
+  titleArtStyle?: string,
+  fontKeyOverride?: string,
+  titleDirectorDecision?: TitleDirectorDecision,
 ): TitleArtTextStyles {
   const style = STANDARD_TITLE_ART_STYLES[getSupportedTitleArtStyle(titleArtStyle)];
-  const fontFilePath = getFontFilePath(style.fontKey);
+  const fontFilePath = getFontFilePath(fontKeyOverride ?? style.fontKey);
   const fontFamily =
     "YuanFangTitleArt, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
+  const titleScale = getTitleScaleMultiplier(titleDirectorDecision?.titleScale);
+  const subtitleScale = getTitleScaleMultiplier(titleDirectorDecision?.subtitleScale);
 
   return {
     title: {
       ...TYPOGRAPHY.title,
       fontFamily,
       fontFilePath,
+      fontSize: Math.round(TYPOGRAPHY.title.fontSize * titleScale),
+      lineHeight: Math.round(TYPOGRAPHY.title.lineHeight * titleScale),
       fill: style.titleFill,
       letterSpacing: style.letterSpacing,
       stroke: style.stroke,
@@ -465,6 +557,8 @@ function buildTitleArtTextStyles(
       ...TYPOGRAPHY.subtitle,
       fontFamily,
       fontFilePath,
+      fontSize: Math.round(TYPOGRAPHY.subtitle.fontSize * subtitleScale),
+      lineHeight: Math.round(TYPOGRAPHY.subtitle.lineHeight * subtitleScale),
       fill: style.subtitleFill,
       letterSpacing: style.letterSpacing,
       stroke: style.stroke,
@@ -556,11 +650,139 @@ function getDisplayPolicy(displayPolicy?: string): ResolvedDisplayPolicy {
   return { key, policy: STANDARD_DISPLAY_POLICIES[key] };
 }
 
+function getTitleDirectorDecision(
+  input: ComposeStandardPosterInput,
+): TitleDirectorDecision {
+  const key = getTitleDirectorPresetKey(
+    input.titleDirectorPreset,
+    input.designFamily,
+  );
+
+  return TITLE_DIRECTOR_PRESETS[key].decision;
+}
+
+function getTitleDirectorPresetKey(
+  titleDirectorPreset?: string,
+  designFamily?: string,
+): string {
+  if (titleDirectorPreset) {
+    return TITLE_DIRECTOR_PRESETS[titleDirectorPreset]
+      ? titleDirectorPreset
+      : "cleanBrand";
+  }
+
+  if (designFamily === "achievementShowcase" || designFamily === "businessLaunch") {
+    return "stageHero";
+  }
+
+  if (designFamily === "modernChinese") {
+    return "modernChineseSeal";
+  }
+
+  if (designFamily === "boldCampaign") {
+    return "campaignImpact";
+  }
+
+  if (designFamily === "literaryEditorial") {
+    return "literaryEditorial";
+  }
+
+  if (designFamily === "ipCartoonEvent") {
+    return "ipEventPlayful";
+  }
+
+  return "cleanBrand";
+}
+
+function getTitlePlacementConfig(
+  placement: TitlePlacementKey,
+  fallbackPlacement: TitlePlacementKey,
+): TitlePlacementConfig {
+  const supportedPlacement = getSupportedTitlePlacement(
+    placement,
+    fallbackPlacement,
+  );
+
+  if (supportedPlacement === "centerHero") {
+    return { x: 540, y: 245, textAnchor: "middle" };
+  }
+
+  if (supportedPlacement === "topLeft") {
+    return { x: 72, y: 174 };
+  }
+
+  if (supportedPlacement === "leftBlock") {
+    return { x: 90, y: 240 };
+  }
+
+  return { x: 540, y: 195, textAnchor: "middle" };
+}
+
+function getSupportedTitlePlacement(
+  placement: TitlePlacementKey,
+  fallbackPlacement: TitlePlacementKey,
+): TitlePlacementKey {
+  if (
+    placement === "topCenter" ||
+    placement === "centerHero" ||
+    placement === "topLeft" ||
+    placement === "leftBlock"
+  ) {
+    return placement;
+  }
+
+  return fallbackPlacement;
+}
+
+function getTitleMaxCharsPerLine(
+  baseMaxCharsPerLine: number,
+  lineBreakMode: TitleLineBreakMode,
+  placement: TitlePlacementConfig,
+): number {
+  if (lineBreakMode === "singleLinePreferred") {
+    return baseMaxCharsPerLine + 2;
+  }
+
+  if (lineBreakMode === "shortLines" || placement.x === 90) {
+    return 6;
+  }
+
+  return baseMaxCharsPerLine;
+}
+
+function getSubtitleMaxCharsPerLine(
+  baseMaxCharsPerLine: number,
+  lineBreakMode: TitleLineBreakMode,
+  placement: TitlePlacementConfig,
+): number {
+  if (lineBreakMode === "singleLinePreferred") {
+    return baseMaxCharsPerLine + 2;
+  }
+
+  if (lineBreakMode === "shortLines" || placement.x === 90) {
+    return 10;
+  }
+
+  return baseMaxCharsPerLine;
+}
+
+function getTitleScaleMultiplier(scale?: TitleScaleLevel): number {
+  if (scale === "hero") {
+    return 1.24;
+  }
+
+  if (scale === "large") {
+    return 1.12;
+  }
+
+  return 1;
+}
+
 function getSupportedTitleArtStyle(
-  titleArtStyle?: StandardTitleArtStyleKey,
+  titleArtStyle?: string,
 ): StandardTitleArtStyleKey {
-  if (titleArtStyle && STANDARD_TITLE_ART_STYLES[titleArtStyle]) {
-    return titleArtStyle;
+  if (titleArtStyle && titleArtStyle in STANDARD_TITLE_ART_STYLES) {
+    return titleArtStyle as StandardTitleArtStyleKey;
   }
 
   return DEFAULT_TITLE_ART_STYLE;

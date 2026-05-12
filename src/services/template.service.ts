@@ -4,11 +4,12 @@ import { STANDARD_DESIGN_FAMILIES, type StandardDesignFamilyKey } from "@/config
 import { STANDARD_DISPLAY_POLICIES } from "@/config/display-policies";
 import { STANDARD_LAYOUT_FAMILIES, type StandardLayoutFamilyKey } from "@/config/layout-families";
 import type { StandardElementKey, StandardStyleKey, StandardThemeKey } from "@/config/scenes";
+import { TITLE_DIRECTOR_PRESETS } from "@/config/title-director";
 import { STANDARD_TITLE_ART_STYLES, type StandardTitleArtStyleKey } from "@/config/title-art-styles";
 import type { ProductOutputType, StandardDesignBriefPromptFields } from "@/models/design-brief";
 import { assertBaseTemplate, assertBrandRulesTemplate, assertPromptFragmentMap, TEMPLATE_INVALID, type BaseTemplate, type BrandRulesTemplate, type PromptFragmentMap } from "@/utils/template-validation";
 
-export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; displayPolicy?: string; showMascot?: boolean; titleArtStyle?: StandardTitleArtStyleKey; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
+export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; displayPolicy?: string; showMascot?: boolean; titleArtStyle?: StandardTitleArtStyleKey; titleDirectorPreset?: string; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
 export type StandardPromptOverlayData = { mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
 export type BuildStandardPromptResult = { prompt: string; overlayData: StandardPromptOverlayData; templateMeta: { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey } };
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
@@ -64,6 +65,8 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
       "",
       ...buildTitleArtStylePrompt(input),
       "",
+      ...buildTitleDirectorPrompt(input),
+      "",
       "【视觉转译要求】",
       "请从活动内容和画面元素中提炼 2-4 个本次独有视觉记忆点，并把它们转译为构图、符号、空间和光影。",
       "不要所有画面都退回书页、山水、卷轴、品牌曲线和中央留白。只有诗词、国学、名著类活动才强化卷轴、山水、月亮、竹子、古典建筑。",
@@ -97,6 +100,7 @@ function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
   const layoutFamily = getLayoutFamily(input.layoutFamily);
   const displayPolicy = getDisplayPolicy(input.displayPolicy);
   const { style: titleArtStyle } = getTitleArtStyle(input.titleArtStyle);
+  const { preset: titleDirectorPreset } = getTitleDirectorPreset(input);
   const promptFields: Partial<StandardDesignBriefPromptFields> = {
     productOutputType: normalizeOptionalText(input.productOutputType) as ProductOutputType | undefined,
     eventBrief: normalizeOptionalText(input.eventBrief),
@@ -111,6 +115,7 @@ function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
     `显示策略：${displayPolicy.key}`,
     `是否显示吉祥物：${input.showMascot ? "显示" : "不显示"}`,
     `标题艺术风格：${titleArtStyle.label}`,
+    `标题导演：${titleDirectorPreset.label}`,
     `物料类型：${getProductOutputLabel(promptFields.productOutputType)}`,
     `活动内容：${promptFields.eventBrief || "未填写"}`,
     `风格倾向：${promptFields.styleBrief || "未填写"}`,
@@ -153,6 +158,10 @@ function buildTitleArtStylePrompt(input: StandardPromptInput): string[] {
   const { style } = getTitleArtStyle(input.titleArtStyle);
   return ["【标题艺术风格】", `风格：${style.label}`, `适用场景：${style.suitableFor.join("、")}`, `字体：${style.fontKey}`, `标题颜色：${style.titleFill}`, `副标题颜色：${style.subtitleFill}`, `说明：${style.description}`, "", "标题由 Sharp 后期合成，AI 不得在背景中生成标题文字。", "背景应为该标题艺术风格预留合适空间，但不要生成文字本身。"];
 }
+function buildTitleDirectorPrompt(input: StandardPromptInput): string[] {
+  const { key, preset } = getTitleDirectorPreset(input);
+  return ["【标题导演】", `预设：${key}`, `标题设计方向：${preset.label}`, `适用场景：${preset.suitableFor.join("、")}`, `标题位置：${preset.decision.placement}`, `字体：${preset.decision.fontKey}`, `标题艺术风格：${preset.decision.titleArtStyle}`, `标题尺度：${preset.decision.titleScale}`, `副标题尺度：${preset.decision.subtitleScale}`, `换行方式：${preset.decision.lineBreakMode}`, `强调方式：${preset.decision.emphasisMode}`, `可读性支持：${preset.decision.readabilitySupport}`, `装饰方向：${preset.decision.decorations.join("、")}`, `原因：${preset.decision.reason}`, "", "标题由 Sharp 后期合成，AI 不得在背景中生成标题文字。", "背景应根据标题导演预设，为标题留出合适视觉位置和复杂度。"];
+}
 function getDesignFamily(designFamily?: StandardDesignFamilyKey) {
   if (!designFamily) return undefined;
   const family = STANDARD_DESIGN_FAMILIES[designFamily];
@@ -172,6 +181,25 @@ function getDisplayPolicy(displayPolicy?: string) {
 function getTitleArtStyle(titleArtStyle?: StandardTitleArtStyleKey) {
   const key = titleArtStyle && STANDARD_TITLE_ART_STYLES[titleArtStyle] ? titleArtStyle : "cleanBrand";
   return { key, style: STANDARD_TITLE_ART_STYLES[key] };
+}
+function getTitleDirectorPreset(input: StandardPromptInput) {
+  const key = getTitleDirectorPresetKey(input.titleDirectorPreset, input.designFamily);
+  return { key, preset: TITLE_DIRECTOR_PRESETS[key] };
+}
+function getTitleDirectorPresetKey(
+  titleDirectorPreset?: string,
+  designFamily?: StandardDesignFamilyKey,
+): string {
+  if (titleDirectorPreset) {
+    return TITLE_DIRECTOR_PRESETS[titleDirectorPreset] ? titleDirectorPreset : "cleanBrand";
+  }
+
+  if (designFamily === "achievementShowcase" || designFamily === "businessLaunch") return "stageHero";
+  if (designFamily === "modernChinese") return "modernChineseSeal";
+  if (designFamily === "boldCampaign") return "campaignImpact";
+  if (designFamily === "literaryEditorial") return "literaryEditorial";
+  if (designFamily === "ipCartoonEvent") return "ipEventPlayful";
+  return "cleanBrand";
 }
 function getProductOutputLabel(productOutputType?: ProductOutputType): string {
   return productOutputType ? PRODUCT_OUTPUT_TYPE_LABELS[productOutputType] ?? productOutputType : "标准活动视觉";

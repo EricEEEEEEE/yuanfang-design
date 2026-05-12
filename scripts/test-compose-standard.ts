@@ -7,7 +7,7 @@ import {
 
 const BACKGROUND_IMAGE_PATH = "/tmp/yuanfang-standard-test-2.png";
 const OUTPUT_PATH = "/tmp/yuanfang-composed-test.jpg";
-const TEST_LAYOUT_FAMILY: StandardLayoutFamilyKey = "sideTitle";
+const TEST_LAYOUT_FAMILY: StandardLayoutFamilyKey = "centerTitle";
 const TEST_PROMPT_INPUT: StandardPromptInput = {
   theme: "classicalLiterature",
   style: "chinese",
@@ -17,6 +17,7 @@ const TEST_PROMPT_INPUT: StandardPromptInput = {
   displayPolicy: "titleOnlyDefault",
   showMascot: false,
   titleArtStyle: "stageGlow",
+  titleDirectorPreset: "stageHero",
   productOutputType: "mainVisual",
   eventBrief: "四大名著少年国学活动",
   styleBrief: "现代国风、偏商务教育主视觉、红金青绿、不要低幼",
@@ -38,6 +39,8 @@ async function main(): Promise<void> {
     displayPolicy: TEST_PROMPT_INPUT.displayPolicy,
     showMascot: TEST_PROMPT_INPUT.showMascot === true,
     titleArtStyle: TEST_PROMPT_INPUT.titleArtStyle,
+    titleDirectorPreset: TEST_PROMPT_INPUT.titleDirectorPreset,
+    designFamily: TEST_PROMPT_INPUT.designFamily,
     ...promptResult.overlayData,
   });
 
