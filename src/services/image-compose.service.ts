@@ -202,7 +202,7 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
     : [];
   const subtitleY = 174 + mainTitleLines.length * titleArtTextStyles.title.lineHeight;
   const subtitleText = subtitleLines.length > 0
-    ? renderTextLines({
+    ? renderTitleArtTextLines({
         lines: subtitleLines,
         x: 72,
         y: subtitleY,
@@ -226,15 +226,17 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
     ${buildFontFaceCss(textStyles)}
-    ${renderTextStyle("title", titleArtTextStyles.title)}
-    ${renderTextStyle("subtitle", titleArtTextStyles.subtitle)}
+    ${renderTitleEffectTextStyle("title-effect", titleArtTextStyles.title)}
+    ${renderTitleFillTextStyle("title-fill", titleArtTextStyles.title)}
+    ${renderTitleEffectTextStyle("subtitle-effect", titleArtTextStyles.subtitle)}
+    ${renderTitleFillTextStyle("subtitle-fill", titleArtTextStyles.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
     ${renderTextStyle("info", TYPOGRAPHY.info)}
     ${renderTextStyle("phone", TYPOGRAPHY.phone)}
   </style>
   ${titleBackground}
   ${campusInfoOverlay}
-  ${renderTextLines({
+  ${renderTitleArtTextLines({
     lines: mainTitleLines,
     x: 72,
     y: 174,
@@ -271,7 +273,7 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
       subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
   );
   const subtitleText = subtitleLines.length > 0
-    ? renderTextLines({
+    ? renderTitleArtTextLines({
         lines: subtitleLines,
         x: 540,
         y: subtitleY,
@@ -296,15 +298,17 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
     ${buildFontFaceCss(textStyles)}
-    ${renderTextStyle("title", titleArtTextStyles.title)}
-    ${renderTextStyle("subtitle", titleArtTextStyles.subtitle)}
+    ${renderTitleEffectTextStyle("title-effect", titleArtTextStyles.title)}
+    ${renderTitleFillTextStyle("title-fill", titleArtTextStyles.title)}
+    ${renderTitleEffectTextStyle("subtitle-effect", titleArtTextStyles.subtitle)}
+    ${renderTitleFillTextStyle("subtitle-fill", titleArtTextStyles.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
     ${renderTextStyle("info", TYPOGRAPHY.info)}
     ${renderTextStyle("phone", TYPOGRAPHY.phone)}
   </style>
   ${titleBackground}
   ${campusInfoOverlay}
-  ${renderTextLines({
+  ${renderTitleArtTextLines({
     lines: mainTitleLines,
     x: 540,
     y: 195,
@@ -339,7 +343,7 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
       subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
   );
   const subtitleText = subtitleLines.length > 0
-    ? renderTextLines({
+    ? renderTitleArtTextLines({
         lines: subtitleLines,
         x: 90,
         y: subtitleY,
@@ -363,15 +367,17 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
     ${buildFontFaceCss(textStyles)}
-    ${renderTextStyle("title", titleArtTextStyles.title)}
-    ${renderTextStyle("subtitle", titleArtTextStyles.subtitle)}
+    ${renderTitleEffectTextStyle("title-effect", titleArtTextStyles.title)}
+    ${renderTitleFillTextStyle("title-fill", titleArtTextStyles.title)}
+    ${renderTitleEffectTextStyle("subtitle-effect", titleArtTextStyles.subtitle)}
+    ${renderTitleFillTextStyle("subtitle-fill", titleArtTextStyles.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
     ${renderTextStyle("info", TYPOGRAPHY.info)}
     ${renderTextStyle("phone", TYPOGRAPHY.phone)}
   </style>
   ${titleBackground}
   ${campusInfoOverlay}
-  ${renderTextLines({
+  ${renderTitleArtTextLines({
     lines: mainTitleLines,
     x: 90,
     y: 240,
@@ -468,13 +474,27 @@ function buildTitleArtTextStyles(
   };
 }
 
-function renderTextStyle(className: string, style: TextStyleWithEffects): string {
+function renderTitleEffectTextStyle(
+  className: string,
+  style: TextStyleWithEffects,
+): string {
   const strokeCss = style.stroke
     ? ` stroke: ${style.stroke.color}; stroke-width: ${style.stroke.width}px; paint-order: stroke fill;`
     : "";
   const filterCss = renderTextFilter(style);
 
   return `.${className} { fill: ${style.fill}; font-family: ${style.fontFamily}; font-size: ${style.fontSize}px; font-weight: ${style.fontWeight}; letter-spacing: ${style.letterSpacing}px;${strokeCss}${filterCss} }`;
+}
+
+function renderTitleFillTextStyle(
+  className: string,
+  style: TextStyleWithEffects,
+): string {
+  return `.${className} { fill: ${style.fill}; font-family: ${style.fontFamily}; font-size: ${style.fontSize}px; font-weight: ${style.fontWeight}; letter-spacing: ${style.letterSpacing}px; }`;
+}
+
+function renderTextStyle(className: string, style: TextStyleConfig): string {
+  return `.${className} { fill: ${style.fill}; font-family: ${style.fontFamily}; font-size: ${style.fontSize}px; font-weight: ${style.fontWeight}; letter-spacing: ${style.letterSpacing}px; }`;
 }
 
 function renderTextFilter(style: TextStyleWithEffects): string {
@@ -662,6 +682,13 @@ function buildFullCampusInfoOverlay(input: ComposeStandardPosterInput): string {
   }
 
   return parts.join("\n  ");
+}
+
+function renderTitleArtTextLines(params: RenderTextLinesParams): string {
+  return [
+    renderTextLines({ ...params, className: `${params.className}-effect` }),
+    renderTextLines({ ...params, className: `${params.className}-fill` }),
+  ].join("\n  ");
 }
 
 function renderTextLines(params: RenderTextLinesParams): string {
