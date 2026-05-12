@@ -7,7 +7,7 @@ import type { StandardElementKey, StandardStyleKey, StandardThemeKey } from "@/c
 import type { ProductOutputType, StandardDesignBriefPromptFields } from "@/models/design-brief";
 import { assertBaseTemplate, assertBrandRulesTemplate, assertPromptFragmentMap, TEMPLATE_INVALID, type BaseTemplate, type BrandRulesTemplate, type PromptFragmentMap } from "@/utils/template-validation";
 
-export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; displayPolicy?: string; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
+export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; displayPolicy?: string; showMascot?: boolean; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
 export type StandardPromptOverlayData = { mainTitle: string; subtitle?: string; campusName?: string; campusAddress?: string; campusPhone?: string };
 export type BuildStandardPromptResult = { prompt: string; overlayData: StandardPromptOverlayData; templateMeta: { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey } };
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
@@ -80,6 +80,7 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
       "",
       "【后期合成边界】",
       "主标题、副标题、校区名称、校区地址、联系电话、二维码、远方 Logo、官方大象吉祥物都由系统后期通过 Sharp 合成。AI 不得直接生成这些内容。",
+      "官方大象吉祥物只由系统后期合成；如果用户未选择显示吉祥物，最终图片不显示吉祥物。",
       "",
       "【硬边界】",
       baseTemplate.negativePrompt.join("\n"),
@@ -104,6 +105,7 @@ function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
     `设计家族：${designFamily?.label || "未指定"}`,
     `版式家族：${layoutFamily?.label || "未指定"}`,
     `显示策略：${displayPolicy.key}`,
+    `是否显示吉祥物：${input.showMascot ? "显示" : "不显示"}`,
     `物料类型：${getProductOutputLabel(promptFields.productOutputType)}`,
     `活动内容：${promptFields.eventBrief || "未填写"}`,
     `风格倾向：${promptFields.styleBrief || "未填写"}`,

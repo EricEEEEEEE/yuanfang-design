@@ -23,6 +23,7 @@ type StandardTestGenerateBody = {
   designFamily?: string;
   layoutFamily?: string;
   displayPolicy?: string;
+  showMascot?: boolean;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -86,6 +87,7 @@ function isStandardTestGenerateBody(
     isOptionalString(value.designFamily) &&
     isOptionalString(value.layoutFamily) &&
     isOptionalString(value.displayPolicy) &&
+    isOptionalBoolean(value.showMascot) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&
@@ -110,6 +112,10 @@ function isRequiredString(value: unknown): boolean {
 
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === "string";
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === "boolean";
 }
 
 function errorCode(error: unknown): string {

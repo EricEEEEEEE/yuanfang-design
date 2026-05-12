@@ -15,6 +15,7 @@ const TEST_PROMPT_INPUT: StandardPromptInput = {
   designFamily: "modernChinese",
   layoutFamily: TEST_LAYOUT_FAMILY,
   displayPolicy: "titleOnlyDefault",
+  showMascot: false,
   productOutputType: "mainVisual",
   eventBrief: "四大名著少年国学活动",
   styleBrief: "现代国风、偏商务教育主视觉、红金青绿、不要低幼",
@@ -34,6 +35,7 @@ async function main(): Promise<void> {
     outputPath: OUTPUT_PATH,
     layoutFamily: TEST_LAYOUT_FAMILY,
     displayPolicy: TEST_PROMPT_INPUT.displayPolicy,
+    showMascot: TEST_PROMPT_INPUT.showMascot === true,
     ...promptResult.overlayData,
   });
 

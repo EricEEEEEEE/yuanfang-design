@@ -32,6 +32,7 @@ type StandardTestComposeBody = {
   designFamily?: string;
   layoutFamily?: string;
   displayPolicy?: string;
+  showMascot?: boolean;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -71,6 +72,7 @@ export async function POST(request: Request): Promise<Response> {
       outputPath,
       layoutFamily: body.layoutFamily as StandardLayoutFamilyKey | undefined,
       displayPolicy: body.displayPolicy,
+      showMascot: body.showMascot === true,
       ...promptResult.overlayData,
     });
 
@@ -111,6 +113,7 @@ function isStandardTestComposeBody(
     isOptionalString(value.designFamily) &&
     isOptionalString(value.layoutFamily) &&
     isOptionalString(value.displayPolicy) &&
+    isOptionalBoolean(value.showMascot) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&
@@ -135,6 +138,10 @@ function isRequiredString(value: unknown): boolean {
 
 function isOptionalString(value: unknown): boolean {
   return value === undefined || typeof value === "string";
+}
+
+function isOptionalBoolean(value: unknown): boolean {
+  return value === undefined || typeof value === "boolean";
 }
 
 async function safeUnlink(path: string): Promise<void> {

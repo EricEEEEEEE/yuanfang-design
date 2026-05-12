@@ -19,6 +19,7 @@ export type StandardDesignBriefInput = {
   designFamily?: StandardDesignFamilyKey;
   layoutFamily?: StandardLayoutFamilyKey;
   displayPolicy?: string;
+  showMascot?: boolean;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
@@ -43,6 +44,7 @@ export type StandardDesignBriefPromptFields = {
   designFamily?: StandardDesignFamilyKey;
   layoutFamily?: StandardLayoutFamilyKey;
   displayPolicy?: string;
+  showMascot?: boolean;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;

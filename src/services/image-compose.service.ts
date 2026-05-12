@@ -21,6 +21,7 @@ export type ComposeStandardPosterInput = {
   campusPhone?: string;
   layoutFamily?: StandardLayoutFamilyKey;
   displayPolicy?: string;
+  showMascot?: boolean;
 };
 
 const COMPOSE_INPUT_INVALID = "COMPOSE_INPUT_INVALID";
@@ -71,11 +72,16 @@ export async function composeStandardPoster(
   const backgroundPath = resolvePath(normalizedInput.backgroundImagePath);
   const outputPath = resolvePath(normalizedInput.outputPath);
   const logoPath = resolvePath(BRAND.logoPath);
-  const mascotPath = resolvePath(BRAND.mascotPath);
+  const mascotPath = normalizedInput.showMascot
+    ? resolvePath(BRAND.mascotPath)
+    : undefined;
 
   assertAssetExists(backgroundPath);
   assertAssetExists(logoPath);
-  assertAssetExists(mascotPath);
+
+  if (mascotPath) {
+    assertAssetExists(mascotPath);
+  }
 
   try {
     const logoPosition = getLogoPosition(normalizedInput.layoutFamily);
@@ -83,30 +89,35 @@ export async function composeStandardPoster(
       .resize({ width: logoPosition.width })
       .png()
       .toBuffer();
-    const mascotBuffer = await sharp(readFileSync(mascotPath))
-      .resize({ width: BRAND.mascotPosition.width })
-      .png()
-      .toBuffer();
+    const compositeInputs = [
+      {
+        input: Buffer.from(buildTextOverlay(normalizedInput)),
+        left: 0,
+        top: 0,
+      },
+      {
+        input: logoBuffer,
+        left: logoPosition.x,
+        top: logoPosition.y,
+      },
+    ];
+
+    if (mascotPath) {
+      const mascotBuffer = await sharp(readFileSync(mascotPath))
+        .resize({ width: BRAND.mascotPosition.width })
+        .png()
+        .toBuffer();
+
+      compositeInputs.push({
+        input: mascotBuffer,
+        left: BRAND.mascotPosition.x,
+        top: BRAND.mascotPosition.y,
+      });
+    }
 
     await sharp(backgroundPath)
       .resize(OUTPUT_WIDTH, OUTPUT_HEIGHT, { fit: "cover" })
-      .composite([
-        {
-          input: Buffer.from(buildTextOverlay(normalizedInput)),
-          left: 0,
-          top: 0,
-        },
-        {
-          input: logoBuffer,
-          left: logoPosition.x,
-          top: logoPosition.y,
-        },
-        {
-          input: mascotBuffer,
-          left: BRAND.mascotPosition.x,
-          top: BRAND.mascotPosition.y,
-        },
-      ])
+      .composite(compositeInputs)
       .jpeg({ quality: OUTPUT_QUALITY })
       .toFile(outputPath);
 
@@ -126,6 +137,7 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
   const campusPhone = normalizeOptionalText(input.campusPhone);
   const layoutFamily = getSupportedLayoutFamily(input.layoutFamily);
   const displayPolicy = getDisplayPolicy(input.displayPolicy).key;
+  const showMascot = input.showMascot === true;
 
   return {
     backgroundImagePath,
@@ -137,6 +149,7 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
     ...(campusPhone ? { campusPhone } : {}),
     layoutFamily,
     displayPolicy,
+    showMascot,
   };
 }
 
