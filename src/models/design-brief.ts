@@ -1,5 +1,6 @@
 import type { StandardDesignFamilyKey } from "@/config/design-families";
 import type { StandardLayoutFamilyKey } from "@/config/layout-families";
+import type { StandardTitleArtStyleKey } from "@/config/title-art-styles";
 
 export type ProductOutputType =
   | "mainVisual"
@@ -20,6 +21,7 @@ export type StandardDesignBriefInput = {
   layoutFamily?: StandardLayoutFamilyKey;
   displayPolicy?: string;
   showMascot?: boolean;
+  titleArtStyle?: StandardTitleArtStyleKey;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
@@ -45,6 +47,7 @@ export type StandardDesignBriefPromptFields = {
   layoutFamily?: StandardLayoutFamilyKey;
   displayPolicy?: string;
   showMascot?: boolean;
+  titleArtStyle?: StandardTitleArtStyleKey;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;

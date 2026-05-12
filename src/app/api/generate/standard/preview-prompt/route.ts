@@ -19,6 +19,7 @@ type PreviewPromptBody = {
   layoutFamily?: string;
   displayPolicy?: string;
   showMascot?: boolean;
+  titleArtStyle?: string;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -69,6 +70,7 @@ function isPreviewPromptBody(value: unknown): value is PreviewPromptBody {
     isOptionalString(value.layoutFamily) &&
     isOptionalString(value.displayPolicy) &&
     isOptionalBoolean(value.showMascot) &&
+    isOptionalString(value.titleArtStyle) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&

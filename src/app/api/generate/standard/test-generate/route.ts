@@ -24,6 +24,7 @@ type StandardTestGenerateBody = {
   layoutFamily?: string;
   displayPolicy?: string;
   showMascot?: boolean;
+  titleArtStyle?: string;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -88,6 +89,7 @@ function isStandardTestGenerateBody(
     isOptionalString(value.layoutFamily) &&
     isOptionalString(value.displayPolicy) &&
     isOptionalBoolean(value.showMascot) &&
+    isOptionalString(value.titleArtStyle) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&

@@ -8,7 +8,13 @@ import {
   type StandardDisplayPolicy,
   type StandardTitleTreatmentKey,
 } from "@/config/display-policies";
+import { STANDARD_FONT_LIBRARY } from "@/config/font-library";
 import type { StandardLayoutFamilyKey } from "@/config/layout-families";
+import {
+  STANDARD_TITLE_ART_STYLES,
+  type StandardTitleArtStyle,
+  type StandardTitleArtStyleKey,
+} from "@/config/title-art-styles";
 import { TYPOGRAPHY, type TextStyleConfig } from "@/config/typography";
 
 export type ComposeStandardPosterInput = {
@@ -22,6 +28,7 @@ export type ComposeStandardPosterInput = {
   layoutFamily?: StandardLayoutFamilyKey;
   displayPolicy?: string;
   showMascot?: boolean;
+  titleArtStyle?: StandardTitleArtStyleKey;
 };
 
 const COMPOSE_INPUT_INVALID = "COMPOSE_INPUT_INVALID";
@@ -33,6 +40,7 @@ const OUTPUT_QUALITY = 78;
 const CENTER_TITLE_LOGO_POSITION = { x: 858, y: 48, width: 150 };
 const SIDE_TITLE_LOGO_POSITION = { x: 820, y: 60, width: 170 };
 const DEFAULT_DISPLAY_POLICY = "titleOnlyDefault";
+const DEFAULT_TITLE_ART_STYLE = "cleanBrand";
 
 type LogoPosition = {
   x: number;
@@ -63,6 +71,14 @@ type TitleBackgroundParams = {
   rx: number;
   titleTreatment: StandardTitleTreatmentKey;
   glassOpacity: number;
+};
+
+type TextStyleWithEffects = TextStyleConfig &
+  Pick<StandardTitleArtStyle, "stroke" | "shadow" | "glow">;
+
+type TitleArtTextStyles = {
+  title: TextStyleWithEffects;
+  subtitle: TextStyleWithEffects;
 };
 
 export async function composeStandardPoster(
@@ -138,6 +154,7 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
   const layoutFamily = getSupportedLayoutFamily(input.layoutFamily);
   const displayPolicy = getDisplayPolicy(input.displayPolicy).key;
   const showMascot = input.showMascot === true;
+  const titleArtStyle = getSupportedTitleArtStyle(input.titleArtStyle);
 
   return {
     backgroundImagePath,
@@ -150,6 +167,7 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
     layoutFamily,
     displayPolicy,
     showMascot,
+    titleArtStyle,
   };
 }
 
@@ -166,9 +184,10 @@ function buildTextOverlay(input: ComposeStandardPosterInput): string {
 }
 
 function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
+  const titleArtTextStyles = buildTitleArtTextStyles(input.titleArtStyle);
   const textStyles = [
-    TYPOGRAPHY.title,
-    TYPOGRAPHY.subtitle,
+    titleArtTextStyles.title,
+    titleArtTextStyles.subtitle,
     TYPOGRAPHY.campus,
     TYPOGRAPHY.info,
     TYPOGRAPHY.phone,
@@ -176,20 +195,20 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
   const { policy } = getDisplayPolicy(input.displayPolicy);
   const mainTitleLines = splitTextByLength(
     input.mainTitle,
-    TYPOGRAPHY.title.maxCharsPerLine,
+    titleArtTextStyles.title.maxCharsPerLine,
   );
   const subtitleLines = input.subtitle
-    ? splitTextByLength(input.subtitle, TYPOGRAPHY.subtitle.maxCharsPerLine)
+    ? splitTextByLength(input.subtitle, titleArtTextStyles.subtitle.maxCharsPerLine)
     : [];
-  const subtitleY = 174 + mainTitleLines.length * TYPOGRAPHY.title.lineHeight;
+  const subtitleY = 174 + mainTitleLines.length * titleArtTextStyles.title.lineHeight;
   const subtitleText = subtitleLines.length > 0
     ? renderTextLines({
         lines: subtitleLines,
         x: 72,
         y: subtitleY,
-        lineHeight: TYPOGRAPHY.subtitle.lineHeight,
+        lineHeight: titleArtTextStyles.subtitle.lineHeight,
         className: "subtitle",
-        letterSpacing: TYPOGRAPHY.subtitle.letterSpacing,
+        letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
       })
     : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
@@ -207,8 +226,8 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
     ${buildFontFaceCss(textStyles)}
-    ${renderTextStyle("title", TYPOGRAPHY.title)}
-    ${renderTextStyle("subtitle", TYPOGRAPHY.subtitle)}
+    ${renderTextStyle("title", titleArtTextStyles.title)}
+    ${renderTextStyle("subtitle", titleArtTextStyles.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
     ${renderTextStyle("info", TYPOGRAPHY.info)}
     ${renderTextStyle("phone", TYPOGRAPHY.phone)}
@@ -219,18 +238,19 @@ function buildClassicTopTextOverlay(input: ComposeStandardPosterInput): string {
     lines: mainTitleLines,
     x: 72,
     y: 174,
-    lineHeight: TYPOGRAPHY.title.lineHeight,
+    lineHeight: titleArtTextStyles.title.lineHeight,
     className: "title",
-    letterSpacing: TYPOGRAPHY.title.letterSpacing,
+    letterSpacing: titleArtTextStyles.title.letterSpacing,
   })}
   ${subtitleText}
 </svg>`;
 }
 
 function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string {
+  const titleArtTextStyles = buildTitleArtTextStyles(input.titleArtStyle);
   const textStyles = [
-    TYPOGRAPHY.title,
-    TYPOGRAPHY.subtitle,
+    titleArtTextStyles.title,
+    titleArtTextStyles.subtitle,
     TYPOGRAPHY.campus,
     TYPOGRAPHY.info,
     TYPOGRAPHY.phone,
@@ -238,26 +258,26 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
   const { policy } = getDisplayPolicy(input.displayPolicy);
   const mainTitleLines = splitTextByLength(
     input.mainTitle,
-    TYPOGRAPHY.title.maxCharsPerLine,
+    titleArtTextStyles.title.maxCharsPerLine,
   );
   const subtitleLines = input.subtitle
-    ? splitTextByLength(input.subtitle, TYPOGRAPHY.subtitle.maxCharsPerLine)
+    ? splitTextByLength(input.subtitle, titleArtTextStyles.subtitle.maxCharsPerLine)
     : [];
-  const subtitleY = 250 + (mainTitleLines.length - 1) * TYPOGRAPHY.title.lineHeight;
+  const subtitleY = 250 + (mainTitleLines.length - 1) * titleArtTextStyles.title.lineHeight;
   const titlePanelHeight = Math.max(
     210,
     96 +
-      mainTitleLines.length * TYPOGRAPHY.title.lineHeight +
-      subtitleLines.length * TYPOGRAPHY.subtitle.lineHeight,
+      mainTitleLines.length * titleArtTextStyles.title.lineHeight +
+      subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
   );
   const subtitleText = subtitleLines.length > 0
     ? renderTextLines({
         lines: subtitleLines,
         x: 540,
         y: subtitleY,
-        lineHeight: TYPOGRAPHY.subtitle.lineHeight,
+        lineHeight: titleArtTextStyles.subtitle.lineHeight,
         className: "subtitle",
-        letterSpacing: TYPOGRAPHY.subtitle.letterSpacing,
+        letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
         textAnchor: "middle",
       })
     : "";
@@ -276,8 +296,8 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
     ${buildFontFaceCss(textStyles)}
-    ${renderTextStyle("title", TYPOGRAPHY.title)}
-    ${renderTextStyle("subtitle", TYPOGRAPHY.subtitle)}
+    ${renderTextStyle("title", titleArtTextStyles.title)}
+    ${renderTextStyle("subtitle", titleArtTextStyles.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
     ${renderTextStyle("info", TYPOGRAPHY.info)}
     ${renderTextStyle("phone", TYPOGRAPHY.phone)}
@@ -288,9 +308,9 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
     lines: mainTitleLines,
     x: 540,
     y: 195,
-    lineHeight: TYPOGRAPHY.title.lineHeight,
+    lineHeight: titleArtTextStyles.title.lineHeight,
     className: "title",
-    letterSpacing: TYPOGRAPHY.title.letterSpacing,
+    letterSpacing: titleArtTextStyles.title.letterSpacing,
     textAnchor: "middle",
   })}
   ${subtitleText}
@@ -298,9 +318,10 @@ function buildCenterTitleTextOverlay(input: ComposeStandardPosterInput): string 
 }
 
 function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
+  const titleArtTextStyles = buildTitleArtTextStyles(input.titleArtStyle);
   const textStyles = [
-    TYPOGRAPHY.title,
-    TYPOGRAPHY.subtitle,
+    titleArtTextStyles.title,
+    titleArtTextStyles.subtitle,
     TYPOGRAPHY.campus,
     TYPOGRAPHY.info,
     TYPOGRAPHY.phone,
@@ -310,21 +331,21 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
   const subtitleLines = input.subtitle
     ? splitTextByLength(input.subtitle, 10)
     : [];
-  const subtitleY = 240 + mainTitleLines.length * TYPOGRAPHY.title.lineHeight + 24;
+  const subtitleY = 240 + mainTitleLines.length * titleArtTextStyles.title.lineHeight + 24;
   const titlePanelHeight = Math.max(
     360,
     164 +
-      mainTitleLines.length * TYPOGRAPHY.title.lineHeight +
-      subtitleLines.length * TYPOGRAPHY.subtitle.lineHeight,
+      mainTitleLines.length * titleArtTextStyles.title.lineHeight +
+      subtitleLines.length * titleArtTextStyles.subtitle.lineHeight,
   );
   const subtitleText = subtitleLines.length > 0
     ? renderTextLines({
         lines: subtitleLines,
         x: 90,
         y: subtitleY,
-        lineHeight: TYPOGRAPHY.subtitle.lineHeight,
+        lineHeight: titleArtTextStyles.subtitle.lineHeight,
         className: "subtitle",
-        letterSpacing: TYPOGRAPHY.subtitle.letterSpacing,
+        letterSpacing: titleArtTextStyles.subtitle.letterSpacing,
       })
     : "";
   const campusInfoOverlay = buildCampusInfoOverlay(input, policy.campusInfoMode);
@@ -342,8 +363,8 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
 <svg width="${OUTPUT_WIDTH}" height="${OUTPUT_HEIGHT}" viewBox="0 0 ${OUTPUT_WIDTH} ${OUTPUT_HEIGHT}" xmlns="http://www.w3.org/2000/svg">
   <style>
     ${buildFontFaceCss(textStyles)}
-    ${renderTextStyle("title", TYPOGRAPHY.title)}
-    ${renderTextStyle("subtitle", TYPOGRAPHY.subtitle)}
+    ${renderTextStyle("title", titleArtTextStyles.title)}
+    ${renderTextStyle("subtitle", titleArtTextStyles.subtitle)}
     ${renderTextStyle("campus", TYPOGRAPHY.campus)}
     ${renderTextStyle("info", TYPOGRAPHY.info)}
     ${renderTextStyle("phone", TYPOGRAPHY.phone)}
@@ -354,9 +375,9 @@ function buildSideTitleTextOverlay(input: ComposeStandardPosterInput): string {
     lines: mainTitleLines,
     x: 90,
     y: 240,
-    lineHeight: TYPOGRAPHY.title.lineHeight,
+    lineHeight: titleArtTextStyles.title.lineHeight,
     className: "title",
-    letterSpacing: TYPOGRAPHY.title.letterSpacing,
+    letterSpacing: titleArtTextStyles.title.letterSpacing,
   })}
   ${subtitleText}
 </svg>`;
@@ -415,8 +436,63 @@ function getFontFormat(filePath: string): string {
   return "truetype";
 }
 
-function renderTextStyle(className: string, style: TextStyleConfig): string {
-  return `.${className} { fill: ${style.fill}; font-family: ${style.fontFamily}; font-size: ${style.fontSize}px; font-weight: ${style.fontWeight}; letter-spacing: ${style.letterSpacing}px; }`;
+function buildTitleArtTextStyles(
+  titleArtStyle?: StandardTitleArtStyleKey,
+): TitleArtTextStyles {
+  const style = STANDARD_TITLE_ART_STYLES[getSupportedTitleArtStyle(titleArtStyle)];
+  const fontFilePath = getFontFilePath(style.fontKey);
+  const fontFamily =
+    "YuanFangTitleArt, PingFang SC, Microsoft YaHei, Noto Sans CJK SC, sans-serif";
+
+  return {
+    title: {
+      ...TYPOGRAPHY.title,
+      fontFamily,
+      fontFilePath,
+      fill: style.titleFill,
+      letterSpacing: style.letterSpacing,
+      stroke: style.stroke,
+      shadow: style.shadow,
+      glow: style.glow,
+    },
+    subtitle: {
+      ...TYPOGRAPHY.subtitle,
+      fontFamily,
+      fontFilePath,
+      fill: style.subtitleFill,
+      letterSpacing: style.letterSpacing,
+      stroke: style.stroke,
+      shadow: style.shadow,
+      glow: style.glow,
+    },
+  };
+}
+
+function renderTextStyle(className: string, style: TextStyleWithEffects): string {
+  const strokeCss = style.stroke
+    ? ` stroke: ${style.stroke.color}; stroke-width: ${style.stroke.width}px; paint-order: stroke fill;`
+    : "";
+  const filterCss = renderTextFilter(style);
+
+  return `.${className} { fill: ${style.fill}; font-family: ${style.fontFamily}; font-size: ${style.fontSize}px; font-weight: ${style.fontWeight}; letter-spacing: ${style.letterSpacing}px;${strokeCss}${filterCss} }`;
+}
+
+function renderTextFilter(style: TextStyleWithEffects): string {
+  const filters: string[] = [];
+
+  if (style.shadow) {
+    filters.push(
+      `drop-shadow(${style.shadow.dx}px ${style.shadow.dy}px ${style.shadow.blur}px ${withOpacity(style.shadow.color, style.shadow.opacity)})`,
+    );
+  }
+
+  if (style.glow) {
+    filters.push(
+      `drop-shadow(0 0 ${style.glow.blur}px ${withOpacity(style.glow.color, style.glow.opacity)})`,
+    );
+  }
+
+  return filters.length > 0 ? ` filter: ${filters.join(" ")};` : "";
 }
 
 function splitTextByLength(text: string, maxLength: number): string[] {
@@ -458,6 +534,24 @@ function getDisplayPolicy(displayPolicy?: string): ResolvedDisplayPolicy {
     : DEFAULT_DISPLAY_POLICY;
 
   return { key, policy: STANDARD_DISPLAY_POLICIES[key] };
+}
+
+function getSupportedTitleArtStyle(
+  titleArtStyle?: StandardTitleArtStyleKey,
+): StandardTitleArtStyleKey {
+  if (titleArtStyle && STANDARD_TITLE_ART_STYLES[titleArtStyle]) {
+    return titleArtStyle;
+  }
+
+  return DEFAULT_TITLE_ART_STYLE;
+}
+
+function getFontFilePath(fontKey: string): string {
+  const font =
+    STANDARD_FONT_LIBRARY[fontKey as keyof typeof STANDARD_FONT_LIBRARY] ??
+    STANDARD_FONT_LIBRARY.sourceHanSansBold;
+
+  return font.filePath;
 }
 
 function buildTitleBackground(params: TitleBackgroundParams): string {
@@ -605,6 +699,30 @@ function assertAssetExists(path: string): void {
 
 function resolvePath(path: string): string {
   return isAbsolute(path) ? path : join(process.cwd(), path);
+}
+
+function withOpacity(color: string, opacity: number): string {
+  const rgb = parseHexColor(color);
+
+  if (!rgb) {
+    return color;
+  }
+
+  return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, ${opacity})`;
+}
+
+function parseHexColor(
+  color: string,
+): { red: number; green: number; blue: number } | undefined {
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+    return undefined;
+  }
+
+  return {
+    red: Number.parseInt(color.slice(1, 3), 16),
+    green: Number.parseInt(color.slice(3, 5), 16),
+    blue: Number.parseInt(color.slice(5, 7), 16),
+  };
 }
 
 function escapeXml(value: string): string {

@@ -3,6 +3,7 @@ import { readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { StandardLayoutFamilyKey } from "@/config/layout-families";
+import type { StandardTitleArtStyleKey } from "@/config/title-art-styles";
 import { composeStandardPoster } from "@/services/image-compose.service";
 import { generateImage } from "@/services/image-gen.service";
 import {
@@ -33,6 +34,7 @@ type StandardTestComposeBody = {
   layoutFamily?: string;
   displayPolicy?: string;
   showMascot?: boolean;
+  titleArtStyle?: string;
   productOutputType?: string;
   eventBrief?: string;
   styleBrief?: string;
@@ -73,6 +75,7 @@ export async function POST(request: Request): Promise<Response> {
       layoutFamily: body.layoutFamily as StandardLayoutFamilyKey | undefined,
       displayPolicy: body.displayPolicy,
       showMascot: body.showMascot === true,
+      titleArtStyle: body.titleArtStyle as StandardTitleArtStyleKey | undefined,
       ...promptResult.overlayData,
     });
 
@@ -114,6 +117,7 @@ function isStandardTestComposeBody(
     isOptionalString(value.layoutFamily) &&
     isOptionalString(value.displayPolicy) &&
     isOptionalBoolean(value.showMascot) &&
+    isOptionalString(value.titleArtStyle) &&
     isOptionalString(value.productOutputType) &&
     isOptionalString(value.eventBrief) &&
     isOptionalString(value.styleBrief) &&
