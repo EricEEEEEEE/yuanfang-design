@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { StandardLayoutFamilyKey } from "@/config/layout-families";
 import { composeStandardPoster } from "@/services/image-compose.service";
 import { generateImage } from "@/services/image-gen.service";
 import {
@@ -67,6 +68,7 @@ export async function POST(request: Request): Promise<Response> {
     await composeStandardPoster({
       backgroundImagePath: backgroundPath,
       outputPath,
+      layoutFamily: body.layoutFamily as StandardLayoutFamilyKey | undefined,
       ...promptResult.overlayData,
     });
 
