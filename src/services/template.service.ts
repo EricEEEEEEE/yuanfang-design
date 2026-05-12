@@ -42,62 +42,74 @@ export type BuildStandardPromptResult = {
 };
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
 const TEMPLATE_NOT_FOUND = "TEMPLATE_NOT_FOUND";
+const PRODUCT_OUTPUT_TYPE_LABELS: Record<ProductOutputType, string> = {
+  mainVisual: "活动主视觉",
+  socialPoster: "朋友圈海报",
+  noticeCard: "通知卡片",
+  wechatHeader: "公众号头图",
+  courseIntro: "课程介绍图",
+  longPoster: "招生长图",
+  eventSchedule: "活动流程图",
+  checkInCard: "打卡图",
+  workShowcase: "作品展示图",
+  displayBoard: "展板/易拉宝",
+  videoCover: "视频封面",
+  xiaohongshuCover: "小红书封面",
+};
 const baseTemplate = loadTemplate<BaseTemplate>("templates/_base.json", assertBaseTemplate);
 const brandRules = loadTemplate<BrandRulesTemplate>("templates/_brand-rules.json", assertBrandRulesTemplate);
 const themeTemplates = loadTemplate<PromptFragmentMap>("templates/standard/themes.json", assertPromptFragmentMap);
 const styleTemplates = loadTemplate<PromptFragmentMap>("templates/standard/styles.json", assertPromptFragmentMap);
 const elementTemplates = loadTemplate<PromptFragmentMap>("templates/standard/elements.json", assertPromptFragmentMap);
-
 export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPromptResult {
   const overlayData = buildOverlayData(input);
   const themeTemplate = themeTemplates[input.theme];
   const styleTemplate = styleTemplates[input.style];
   const elementTemplate = elementTemplates[input.element];
-  const structuredBriefPrompt = buildStructuredBriefPrompt(input);
-  const visualBrief = normalizeOptionalText(input.visualBrief);
-  const visualBriefPrompt = visualBrief
-    ? [
-        "",
-        "【视觉主题参考】",
-        visualBrief,
-        "以上内容只作为画面主题和意象参考，不得生成任何文字、标题、Logo、二维码、电话或校区信息。",
-      ]
-    : [];
-
   if (!themeTemplate || !styleTemplate || !elementTemplate) {
     throw new Error(TEMPLATE_NOT_FOUND);
   }
-
   return {
     prompt: [
-      "【品牌视觉规则】",
+      "【输出任务】",
+      `生成${getProductOutputLabel(input.productOutputType)}的背景主视觉 / 设计背景，不是完整海报成品。`,
+      "画面必须服务后期排版与品牌合成，同时根据本次活动需求形成差异化视觉记忆点。",
+      "",
+      "【品牌 DNA】",
       `品牌名称：${brandRules.brandName}`,
       `英文名称：${brandRules.englishName}`,
       `品牌精神：${brandRules.brandSpirit.join("、")}`,
       `品牌颜色：${formatColors(brandRules.colors)}`,
       `视觉语言：${brandRules.visualLanguage.join("、")}`,
-      `可用视觉母题：${brandRules.allowedVisualMotifs.join("、")}`,
+      `可用视觉母题：${brandRules.allowedVisualMotifs.join("、")}。这些是可选参考，不是每张图都必须出现。`,
       `Logo 规则：${brandRules.logoRules.join("；")}`,
       `吉祥物规则：${brandRules.mascotRules.join("；")}`,
-      "",
-      "【AI 生成边界】",
       baseTemplate.basePrompt,
-      ...structuredBriefPrompt,
+      "",
+      "【本次设计需求】",
+      ...buildDesignDemandPrompt(input),
+      "",
+      "【视觉转译要求】",
+      "请从活动内容和画面元素中提炼 2-4 个本次独有视觉记忆点，并把它们转译为构图、符号、空间和光影。",
+      "不要所有画面都退回书页、山水、卷轴、品牌曲线和中央留白。只有诗词、国学、名著类活动才强化卷轴、山水、月亮、竹子、古典建筑。",
+      "招生、公开课、课程发布应使用现代教育品牌视觉符号；汇报课、比赛应使用成果展示、舞台光、奖章、作品墙；公司活动应使用商务发布会、品牌色块、数字纪念。",
       "",
       "【主题场景】",
       themeTemplate.prompt,
       "",
-      "【视觉风格】",
+      "【风格方向】",
       styleTemplate.prompt,
       "",
       "【画面元素】",
       elementTemplate.prompt,
-      ...visualBriefPrompt,
       "",
-      "【版式要求】",
+      "【构图策略】",
       baseTemplate.layoutPrompt,
       "",
-      "【禁止项】",
+      "【后期合成边界】",
+      "主标题、副标题、校区名称、校区地址、联系电话、二维码、远方 Logo、官方大象吉祥物都由系统后期通过 Sharp 合成。AI 不得直接生成这些内容。",
+      "",
+      "【硬边界】",
       baseTemplate.negativePrompt.join("\n"),
     ].join("\n"),
     overlayData,
@@ -108,19 +120,7 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
     },
   };
 }
-
-function buildStructuredBriefPrompt(input: StandardPromptInput): string[] {
-  const hasStructuredBrief =
-    input.productOutputType !== undefined ||
-    input.eventBrief !== undefined ||
-    input.styleBrief !== undefined ||
-    input.visualDetails !== undefined ||
-    input.avoidNotes !== undefined;
-
-  if (!hasStructuredBrief) {
-    return [];
-  }
-
+function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
   const promptFields: Partial<StandardDesignBriefPromptFields> = {
     productOutputType: normalizeOptionalText(input.productOutputType) as ProductOutputType | undefined,
     eventBrief: normalizeOptionalText(input.eventBrief),
@@ -128,22 +128,23 @@ function buildStructuredBriefPrompt(input: StandardPromptInput): string[] {
     visualDetails: normalizeOptionalText(input.visualDetails),
     avoidNotes: normalizeOptionalText(input.avoidNotes),
   };
-
+  const visualBrief = normalizeOptionalText(input.visualBrief);
   return [
-    "",
-    "【结构化设计需求】",
-    `物料类型：${promptFields.productOutputType || "标准活动视觉"}`,
+    `物料类型：${getProductOutputLabel(promptFields.productOutputType)}`,
     `活动内容：${promptFields.eventBrief || "未填写"}`,
     `风格倾向：${promptFields.styleBrief || "未填写"}`,
     `画面元素：${promptFields.visualDetails || "未填写"}`,
     `规避内容：${promptFields.avoidNotes || "未填写"}`,
-    "",
+    `补充主题参考：${visualBrief || "未填写"}`,
     "请优先根据以上结构化设计需求生成本次背景主视觉。",
     "这些字段用于理解活动、风格、视觉元素和规避方向，不得直接生成文字、标题、Logo、二维码、电话或校区信息。",
-    "请避免退回通用模板底板；应根据活动内容和画面元素形成差异化视觉记忆点。",
   ];
 }
-
+function getProductOutputLabel(productOutputType?: ProductOutputType): string {
+  return productOutputType
+    ? PRODUCT_OUTPUT_TYPE_LABELS[productOutputType] ?? productOutputType
+    : "标准活动视觉";
+}
 function loadTemplate<Template>(
   relativePath: string,
   assertTemplate: (value: unknown) => asserts value is Template,
@@ -161,14 +162,12 @@ function loadTemplate<Template>(
     throw new Error(TEMPLATE_INVALID);
   }
 }
-
 function buildOverlayData(input: StandardPromptInput): StandardPromptOverlayData {
   const mainTitle = normalizeRequiredText(input.mainTitle);
   const campusName = normalizeRequiredText(input.campusName);
   const campusPhone = normalizeRequiredText(input.campusPhone);
   const subtitle = normalizeOptionalText(input.subtitle);
   const campusAddress = normalizeOptionalText(input.campusAddress);
-
   return {
     mainTitle,
     ...(subtitle ? { subtitle } : {}),
@@ -177,21 +176,16 @@ function buildOverlayData(input: StandardPromptInput): StandardPromptOverlayData
     campusPhone,
   };
 }
-
 function normalizeRequiredText(value: string): string {
   const normalizedValue = value.trim();
-
   if (!normalizedValue) {
     throw new Error(INVALID_TEMPLATE_INPUT);
   }
-
   return normalizedValue;
 }
-
 function normalizeOptionalText(value?: string): string | undefined {
   return value?.trim() || undefined;
 }
-
 function formatColors(colors: Record<string, string>): string {
   return Object.entries(colors)
     .map(([name, value]) => `${name} ${value}`)
