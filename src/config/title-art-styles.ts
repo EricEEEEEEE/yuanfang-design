@@ -62,22 +62,23 @@ export const STANDARD_TITLE_ART_STYLES: Record<
     subtitleFill: "#EF7A00",
     stroke: {
       color: "#FFFFFF",
-      width: 2,
+      width: 1,
     },
     shadow: {
       color: "#0B1F3A",
       dx: 0,
-      dy: 5,
-      blur: 10,
-      opacity: 0.26,
+      dy: 4,
+      blur: 5,
+      opacity: 0.38,
     },
     glow: {
       color: "#FFE8A3",
-      blur: 14,
-      opacity: 0.35,
+      blur: 8,
+      opacity: 0.22,
     },
     letterSpacing: 1,
-    description: "舞台聚光感，标题像站在舞台光里，正式、有仪式感。",
+    description:
+      "舞台聚光感，标题像站在舞台光里，正式、有仪式感。标题应以实心蓝色为主，白色描边只用于增强可读性，不要形成空心字效果。",
   },
   modernChinese: {
     label: "现代国风标题",
@@ -168,4 +169,3 @@ export const STANDARD_TITLE_ART_STYLES: Record<
     description: "活泼、有活动感、适合品牌 IP 和轻活动，但不能低幼。",
   },
 };
-
