@@ -1,4 +1,5 @@
 import type { StandardDesignFamilyKey } from "@/config/design-families";
+import type { StandardLayoutFamilyKey } from "@/config/layout-families";
 
 export type ProductOutputType =
   | "mainVisual"
@@ -16,6 +17,7 @@ export type ProductOutputType =
 
 export type StandardDesignBriefInput = {
   designFamily?: StandardDesignFamilyKey;
+  layoutFamily?: StandardLayoutFamilyKey;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;
@@ -38,6 +40,7 @@ export type StandardDesignBriefOverlayData = {
 
 export type StandardDesignBriefPromptFields = {
   designFamily?: StandardDesignFamilyKey;
+  layoutFamily?: StandardLayoutFamilyKey;
   productOutputType: ProductOutputType;
   eventBrief: string;
   styleBrief?: string;

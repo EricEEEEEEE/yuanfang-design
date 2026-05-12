@@ -1,35 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { STANDARD_DESIGN_FAMILIES, type StandardDesignFamilyKey } from "@/config/design-families";
+import { STANDARD_LAYOUT_FAMILIES, type StandardLayoutFamilyKey } from "@/config/layout-families";
 import type { StandardElementKey, StandardStyleKey, StandardThemeKey } from "@/config/scenes";
 import type { ProductOutputType, StandardDesignBriefPromptFields } from "@/models/design-brief";
-import {
-  assertBaseTemplate,
-  assertBrandRulesTemplate,
-  assertPromptFragmentMap,
-  TEMPLATE_INVALID,
-  type BaseTemplate,
-  type BrandRulesTemplate,
-  type PromptFragmentMap,
-} from "@/utils/template-validation";
+import { assertBaseTemplate, assertBrandRulesTemplate, assertPromptFragmentMap, TEMPLATE_INVALID, type BaseTemplate, type BrandRulesTemplate, type PromptFragmentMap } from "@/utils/template-validation";
 
-export type StandardPromptInput = {
-  theme: StandardThemeKey;
-  style: StandardStyleKey;
-  element: StandardElementKey;
-  designFamily?: StandardDesignFamilyKey;
-  productOutputType?: ProductOutputType;
-  eventBrief?: string;
-  styleBrief?: string;
-  visualDetails?: string;
-  avoidNotes?: string;
-  visualBrief?: string;
-  mainTitle: string;
-  subtitle?: string;
-  campusName: string;
-  campusAddress?: string;
-  campusPhone: string;
-};
+export type StandardPromptInput = { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey; designFamily?: StandardDesignFamilyKey; layoutFamily?: StandardLayoutFamilyKey; productOutputType?: ProductOutputType; eventBrief?: string; styleBrief?: string; visualDetails?: string; avoidNotes?: string; visualBrief?: string; mainTitle: string; subtitle?: string; campusName: string; campusAddress?: string; campusPhone: string };
 export type StandardPromptOverlayData = { mainTitle: string; subtitle?: string; campusName: string; campusAddress?: string; campusPhone: string };
 export type BuildStandardPromptResult = { prompt: string; overlayData: StandardPromptOverlayData; templateMeta: { theme: StandardThemeKey; style: StandardStyleKey; element: StandardElementKey } };
 const INVALID_TEMPLATE_INPUT = "INVALID_TEMPLATE_INPUT";
@@ -79,6 +56,8 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
       "",
       ...buildDesignFamilyPrompt(input),
       "",
+      ...buildLayoutFamilyPrompt(input),
+      "",
       "【视觉转译要求】",
       "请从活动内容和画面元素中提炼 2-4 个本次独有视觉记忆点，并把它们转译为构图、符号、空间和光影。",
       "不要所有画面都退回书页、山水、卷轴、品牌曲线和中央留白。只有诗词、国学、名著类活动才强化卷轴、山水、月亮、竹子、古典建筑。",
@@ -108,6 +87,7 @@ export function buildStandardPrompt(input: StandardPromptInput): BuildStandardPr
 }
 function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
   const designFamily = getDesignFamily(input.designFamily);
+  const layoutFamily = getLayoutFamily(input.layoutFamily);
   const promptFields: Partial<StandardDesignBriefPromptFields> = {
     productOutputType: normalizeOptionalText(input.productOutputType) as ProductOutputType | undefined,
     eventBrief: normalizeOptionalText(input.eventBrief),
@@ -118,6 +98,7 @@ function buildDesignDemandPrompt(input: StandardPromptInput): string[] {
   const visualBrief = normalizeOptionalText(input.visualBrief);
   return [
     `设计家族：${designFamily?.label || "未指定"}`,
+    `版式家族：${layoutFamily?.label || "未指定"}`,
     `物料类型：${getProductOutputLabel(promptFields.productOutputType)}`,
     `活动内容：${promptFields.eventBrief || "未填写"}`,
     `风格倾向：${promptFields.styleBrief || "未填写"}`,
@@ -147,16 +128,40 @@ function buildDesignFamilyPrompt(input: StandardPromptInput): string[] {
     "品牌 VI、硬边界和后期合成规则仍然必须遵守。",
   ];
 }
+function buildLayoutFamilyPrompt(input: StandardPromptInput): string[] {
+  const family = getLayoutFamily(input.layoutFamily);
+  if (!family) return [];
+  return [
+    "【版式家族方向】",
+    `版式方向：${family.label}`,
+    `适用场景：${family.suitableFor.join("、")}`,
+    `标题区域：${family.titleArea}`,
+    `信息区域：${family.infoArea}`,
+    `Logo 区域：${family.logoArea}`,
+    `吉祥物区域：${family.mascotArea}`,
+    `构图意图：${family.compositionIntent}`,
+    `规避方向：${family.avoid.join("、")}`,
+    `方向说明：${family.prompt}`,
+    "",
+    "请根据该版式方向安排背景复杂度、视觉重心和留白区域。",
+    "它只是背景生成阶段的构图参考，最终标题、Logo、吉祥物、校区信息仍由 Sharp 后期合成。",
+    "不要让所有背景都默认服务于“顶部标题 + 底部信息栏”的同一模板。",
+  ];
+}
 function getDesignFamily(designFamily?: StandardDesignFamilyKey) {
   if (!designFamily) return undefined;
   const family = STANDARD_DESIGN_FAMILIES[designFamily];
   if (!family) throw new Error(TEMPLATE_NOT_FOUND);
   return family;
 }
+function getLayoutFamily(layoutFamily?: StandardLayoutFamilyKey) {
+  if (!layoutFamily) return undefined;
+  const family = STANDARD_LAYOUT_FAMILIES[layoutFamily];
+  if (!family) throw new Error(TEMPLATE_NOT_FOUND);
+  return family;
+}
 function getProductOutputLabel(productOutputType?: ProductOutputType): string {
-  return productOutputType
-    ? PRODUCT_OUTPUT_TYPE_LABELS[productOutputType] ?? productOutputType
-    : "标准活动视觉";
+  return productOutputType ? PRODUCT_OUTPUT_TYPE_LABELS[productOutputType] ?? productOutputType : "标准活动视觉";
 }
 function loadTemplate<Template>(
   relativePath: string,
