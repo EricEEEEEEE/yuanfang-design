@@ -37,6 +37,7 @@ export type ComposeStandardPosterInput = {
   showMascot?: boolean;
   titleArtStyle?: StandardTitleArtStyleKey;
   titleDirectorPreset?: string;
+  titleDirectorDecision?: TitleDirectorDecision;
   designFamily?: string;
 };
 
@@ -185,6 +186,7 @@ function normalizeInput(input: ComposeStandardPosterInput): ComposeStandardPoste
     displayPolicy,
     showMascot,
     titleArtStyle,
+    ...(input.titleDirectorDecision ? { titleDirectorDecision: input.titleDirectorDecision } : {}),
     ...(titleDirectorPreset ? { titleDirectorPreset } : {}),
     ...(designFamily ? { designFamily } : {}),
   };
@@ -653,6 +655,10 @@ function getDisplayPolicy(displayPolicy?: string): ResolvedDisplayPolicy {
 function getTitleDirectorDecision(
   input: ComposeStandardPosterInput,
 ): TitleDirectorDecision {
+  if (input.titleDirectorDecision) {
+    return input.titleDirectorDecision;
+  }
+
   const key = getTitleDirectorPresetKey(
     input.titleDirectorPreset,
     input.designFamily,

@@ -10,6 +10,7 @@ import {
   buildStandardPrompt,
   type StandardPromptInput,
 } from "@/services/template.service";
+import { resolveTitleDirector } from "@/services/title-director.service";
 
 const ERROR_STATUS: Record<string, number> = {
   INVALID_REQUEST: 400,
@@ -34,6 +35,7 @@ type StandardTestComposeBody = {
   layoutFamily?: string;
   displayPolicy?: string;
   showMascot?: boolean;
+  useAiTitleDirector?: boolean;
   titleArtStyle?: string;
   titleDirectorPreset?: string;
   productOutputType?: string;
@@ -68,6 +70,23 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const promptResult = buildStandardPrompt(input);
     const imageResult = await generateImage({ prompt: promptResult.prompt });
+    const titleDirectorResult = body.useAiTitleDirector
+      ? await resolveTitleDirector({
+          backgroundImageBase64: imageResult.imageBase64,
+          mainTitle: body.mainTitle,
+          subtitle: body.subtitle,
+          designFamily: body.designFamily,
+          layoutFamily: body.layoutFamily,
+          displayPolicy: body.displayPolicy,
+          titleArtStyle: body.titleArtStyle,
+          titleDirectorPreset: body.titleDirectorPreset,
+          productOutputType: body.productOutputType,
+          eventBrief: body.eventBrief,
+          styleBrief: body.styleBrief,
+          visualDetails: body.visualDetails,
+          avoidNotes: body.avoidNotes,
+        }).catch(() => undefined)
+      : undefined;
 
     await writeFile(backgroundPath, Buffer.from(imageResult.imageBase64, "base64"));
     await composeStandardPoster({
@@ -78,6 +97,9 @@ export async function POST(request: Request): Promise<Response> {
       showMascot: body.showMascot === true,
       titleArtStyle: body.titleArtStyle as StandardTitleArtStyleKey | undefined,
       titleDirectorPreset: body.titleDirectorPreset,
+      titleDirectorDecision: titleDirectorResult?.source === "ai"
+        ? titleDirectorResult.decision
+        : undefined,
       designFamily: body.designFamily,
       ...promptResult.overlayData,
     });
@@ -89,6 +111,7 @@ export async function POST(request: Request): Promise<Response> {
       modelUsed: imageResult.modelUsed,
       overlayData: promptResult.overlayData,
       templateMeta: promptResult.templateMeta,
+      ...(titleDirectorResult ? { titleDirectorResult } : {}),
     });
   } catch (error) {
     return errorResponse(errorCode(error));
@@ -120,6 +143,7 @@ function isStandardTestComposeBody(
     isOptionalString(value.layoutFamily) &&
     isOptionalString(value.displayPolicy) &&
     isOptionalBoolean(value.showMascot) &&
+    isOptionalBoolean(value.useAiTitleDirector) &&
     isOptionalString(value.titleArtStyle) &&
     isOptionalString(value.titleDirectorPreset) &&
     isOptionalString(value.productOutputType) &&
