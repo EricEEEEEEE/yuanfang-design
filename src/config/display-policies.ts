@@ -19,10 +19,10 @@ export type StandardDisplayPolicy = {
 
 export const STANDARD_DISPLAY_POLICIES: Record<string, StandardDisplayPolicy> = {
   titleOnlyDefault: {
-    titleTreatment: "softGlow",
+    titleTreatment: "noPanel",
     campusInfoMode: "hidden",
     description:
-      "默认策略。只显示主标题和副标题，不显示校区名称、地址、电话和底部信息白框。适合朋友圈、主视觉、小红书封面、品牌活动图。",
+      "默认策略。只显示主标题和副标题文字，不显示标题底框，不显示校区名称、地址、电话和底部信息白框。适合后续字体设计、朋友圈、主视觉、小红书封面、品牌活动图。",
   },
   cleanPoster: {
     titleTreatment: "noPanel",
