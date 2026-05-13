@@ -6,6 +6,13 @@ import {
   type TitlePatternMutation,
   type TitleReferencePatternKey,
 } from "@/config/title-reference-patterns";
+import type { TextAnchor } from "@/services/background-layout-intelligence.service";
+import {
+  planSpatialStrategy,
+  type SpatialStrategy,
+  type TitleOrientationPreference,
+  type TitleSpatialStrategyMode,
+} from "@/services/spatial-strategy-planner.service";
 
 export type TitleCandidateUnitRole =
   | "lead"
@@ -60,6 +67,9 @@ export type TitleCandidateDecorationIntent =
 
 export type TitleCandidate = {
   candidateId: string;
+  spatialAnchorId: string;
+  strategyMode: TitleSpatialStrategyMode;
+  orientationPreference: TitleOrientationPreference;
   patternKeys: TitleReferencePatternKey[];
   hybridStrategy: string;
   titleUnits: TitleCandidateUnit[];
@@ -89,6 +99,7 @@ export type GenerateTitleCandidatesResult = {
   source: "ai" | "fallback";
   candidates: TitleCandidate[];
   reason: string;
+  spatialStrategy: SpatialStrategy;
 };
 
 type PatternSummary = {
@@ -110,11 +121,9 @@ type CandidateValidationDiagnostic = {
   rawPreview?: string;
 };
 
-type PatternSelection = {
-  primary: TitleReferencePatternKey[];
-  secondary: TitleReferencePatternKey[];
-  exploratory: TitleReferencePatternKey[];
-  disallowed: TitleReferencePatternKey[];
+type AnchorPosition = {
+  x: number;
+  y: number;
 };
 
 const UNIT_ROLES: readonly TitleCandidateUnitRole[] = ["lead", "main", "accent", "support"];
@@ -127,11 +136,15 @@ const PATTERN_KEYS = Object.keys(TITLE_REFERENCE_PATTERNS) as TitleReferencePatt
 export async function generateTitleCandidates(
   input: GenerateTitleCandidatesInput,
 ): Promise<GenerateTitleCandidatesResult> {
+  const spatialStrategy = await planSpatialStrategy(input);
   const apiKey = process.env.OPENAI_API_KEY;
-  const patternSelection = getPatternSelection(input);
 
   if (!apiKey) {
-    return fallback(input, "OPENAI_API_KEY missing; used reference-pattern fallback candidates.");
+    return fallback(
+      input,
+      "OPENAI_API_KEY missing; used spatial-strategy fallback candidates.",
+      spatialStrategy,
+    );
   }
 
   try {
@@ -143,7 +156,7 @@ export async function generateTitleCandidates(
         {
           role: "user",
           content: [
-            { type: "text", text: buildUserPrompt(input, patternSelection) },
+            { type: "text", text: buildUserPrompt(input, spatialStrategy) },
             { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
           ],
         },
@@ -154,21 +167,28 @@ export async function generateTitleCandidates(
     const parsed = parseCandidatesWithDiagnostic(
       response.choices[0]?.message?.content,
       input.mainTitle,
-      patternSelection,
+      spatialStrategy,
     );
 
     if (!parsed.candidates) {
       return fallback(
         input,
         `AI title candidate output invalid: ${formatDiagnostic(parsed.diagnostic)}; used fallback candidates.`,
+        spatialStrategy,
       );
     }
 
-    return { source: "ai", candidates: parsed.candidates, reason: "AI generated validated reference-driven title candidates." };
+    return {
+      source: "ai",
+      candidates: parsed.candidates,
+      reason: "AI generated validated reference-driven title candidates.",
+      spatialStrategy,
+    };
   } catch (error) {
     return fallback(
       input,
       `AI title candidate generation failed: ${errorMessage(error)}; used fallback candidates.`,
+      spatialStrategy,
     );
   }
 }
@@ -197,7 +217,14 @@ function buildSystemPrompt(): string {
   ].join("\n");
 }
 
-function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: PatternSelection): string {
+function buildUserPrompt(input: GenerateTitleCandidatesInput, spatialStrategy: SpatialStrategy): string {
+  const patternPool = spatialStrategy.patternPool;
+  const primaryAnchor = getTextAnchorById(spatialStrategy, spatialStrategy.primaryTextAnchorId)
+    ?? fallbackTextAnchor(spatialStrategy.primaryTextAnchorId);
+  const exampleLeadPosition = getUnitPositionInAnchor(primaryAnchor, 0, 2, 0, spatialStrategy.orientationPreference);
+  const exampleMainPosition = getUnitPositionInAnchor(primaryAnchor, 1, 2, 0, spatialStrategy.orientationPreference);
+  const exampleSubtitlePosition = getSubtitlePositionInAnchor(primaryAnchor);
+
   return [
     `mainTitle: ${input.mainTitle}`,
     `subtitle: ${input.subtitle || "未填写"}`,
@@ -209,15 +236,48 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: 
     `styleBrief: ${input.styleBrief || "未填写"}`,
     `visualDetails: ${input.visualDetails || "未填写"}`,
     `avoidNotes: ${input.avoidNotes || "未填写"}`,
+    "【Spatial Strategy】",
+    `contentIntent: ${spatialStrategy.contentIntent}`,
+    `strategyMode: ${spatialStrategy.strategyMode}`,
+    `orientationPreference: ${spatialStrategy.orientationPreference}`,
+    `primaryTextAnchorId: ${spatialStrategy.primaryTextAnchorId}`,
+    `secondaryTextAnchorIds: ${spatialStrategy.secondaryTextAnchorIds.join(" / ") || "无"}`,
+    `patternPool.primary: ${patternPool.primary.join(" / ")}`,
+    `patternPool.secondary: ${patternPool.secondary.join(" / ")}`,
+    `patternPool.exploratory: ${patternPool.exploratory.join(" / ")}`,
+    `patternPool.disallowed: ${patternPool.disallowed.join(" / ")}`,
+    "candidateGuidance:",
+    JSON.stringify(spatialStrategy.candidateGuidance, null, 2),
+    "forbiddenGuidance:",
+    JSON.stringify(spatialStrategy.forbiddenGuidance, null, 2),
+    "backgroundLayout.textAnchors:",
+    JSON.stringify(spatialStrategy.backgroundLayout.textAnchors, null, 2),
+    "backgroundLayout.forbiddenZones:",
+    JSON.stringify(spatialStrategy.backgroundLayout.forbiddenZones, null, 2),
+    `backgroundLayout.negativeSpaceShape: ${spatialStrategy.backgroundLayout.negativeSpaceShape}`,
+    `backgroundLayout.dominantFlow: ${spatialStrategy.backgroundLayout.dominantFlow}`,
+    `backgroundLayout.recommendedTitleFlow: ${spatialStrategy.backgroundLayout.recommendedTitleFlow}`,
     "推荐 primary patterns 摘要：",
-    JSON.stringify(getReferencePatternSummaries(patternSelection.primary), null, 2),
+    JSON.stringify(getReferencePatternSummaries(patternPool.primary), null, 2),
     "可混合 secondary patterns 摘要：",
-    JSON.stringify(getReferencePatternSummaries(patternSelection.secondary), null, 2),
+    JSON.stringify(getReferencePatternSummaries(patternPool.secondary), null, 2),
     "少量 exploratory patterns 摘要：",
-    JSON.stringify(getReferencePatternSummaries(patternSelection.exploratory), null, 2),
-    `禁用 disallowed pattern keys：${patternSelection.disallowed.join(" / ")}`,
+    JSON.stringify(getReferencePatternSummaries(patternPool.exploratory), null, 2),
+    `禁用 disallowed pattern keys：${patternPool.disallowed.join(" / ")}`,
     "输出 JSON 格式：{ \"candidates\": [TitleCandidate...] }。",
     "candidates 数组长度必须正好是 6。",
+    "每个 candidate 必须包含 spatialAnchorId、strategyMode、orientationPreference。",
+    "spatialAnchorId 必须来自 primaryTextAnchorId 或 secondaryTextAnchorIds。",
+    "strategyMode 必须等于 Spatial Strategy 的 strategyMode。",
+    "orientationPreference 必须等于 Spatial Strategy 的 orientationPreference。",
+    "candidate 1-4：必须使用 primaryTextAnchorId。",
+    "candidate 5-6：可以使用 secondaryTextAnchorIds，但不得脱离空间策略。",
+    "每个 titleUnit 的 x/y 必须落在 spatialAnchorId 对应 textAnchor 的 box 内。",
+    "x / y 使用 0-1000 全局归一化坐标，不是局部坐标。",
+    "如果 orientationPreference 是 verticalFirst：至少 4 个 candidate 必须体现竖向空间组织，可以是 vertical direction，也可以是上下错落 stack，但不能 6 个全是水平一行。",
+    "patternKeys 不能包含 patternPool.disallowed。",
+    "即使使用 stage/business pattern，也必须沿 verticalColumn 组织字组，不要误改成国风。",
+    "reference pattern 是设计语法，不是模板；背景空间策略优先。",
     "candidate 1-4：必须使用 primary patterns，可以 1 个 pattern 或 primary+primary 混合。",
     "candidate 5：可以使用 primary + secondary。",
     "candidate 6：可以使用 secondary 或 exploratory，但不能使用 disallowed。",
@@ -230,9 +290,9 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: 
     "如果 designFamily 是 achievementShowcase：不要使用 campaignDiagonalImpact，除非 eventBrief 明确是招生/报名/开班提醒。",
     "如果 designFamily 是 achievementShowcase：不要使用 ipPlayfulStack，除非 eventBrief 明确是游园会/IP/轻活动。",
     "成长汇报课优先 stage / business / clean / literary 的成果展示语法。",
-    "每个 candidate 必须包含 candidateId、patternKeys、hybridStrategy、titleUnits、effectIntent、decorationIntents、readabilityPlan、backgroundFitReason、whyNotTemplate。",
+    "每个 candidate 必须包含 candidateId、spatialAnchorId、strategyMode、orientationPreference、patternKeys、hybridStrategy、titleUnits、effectIntent、decorationIntents、readabilityPlan、backgroundFitReason、whyNotTemplate。",
     "titleUnits 每项包含 text、role、direction、x、y、scale、rotationDeg。",
-    "x / y 使用 0-1000 局部归一化坐标；scale 0.7-1.8；rotationDeg -15 到 15。",
+    "scale 0.7-1.8；rotationDeg -15 到 15。",
     "backgroundFitReason 必须说明它为什么适合当前背景。",
     "whyNotTemplate 必须说明它如何避免固定模板套用。",
     "如果 mainTitle 是“成长汇报课”，优先考虑：成长 / 汇报课、成长 / 汇报 / 课、成长汇报课。",
@@ -240,6 +300,9 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: 
     "严格字段示例：",
     JSON.stringify({
       candidateId: "c1",
+      spatialAnchorId: spatialStrategy.primaryTextAnchorId,
+      strategyMode: spatialStrategy.strategyMode,
+      orientationPreference: spatialStrategy.orientationPreference,
       patternKeys: ["stageSplitHero"],
       hybridStrategy: "基于 stageSplitHero，将标题拆成前导词和主视觉词。",
       titleUnits: [
@@ -247,8 +310,8 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: 
           text: "成长",
           role: "lead",
           direction: "horizontal",
-          x: 350,
-          y: 450,
+          x: exampleLeadPosition.x,
+          y: exampleLeadPosition.y,
           scale: 1.2,
           rotationDeg: 0,
         },
@@ -256,16 +319,16 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: 
           text: "汇报课",
           role: "main",
           direction: "horizontal",
-          x: 560,
-          y: 450,
+          x: exampleMainPosition.x,
+          y: exampleMainPosition.y,
           scale: 1.55,
           rotationDeg: 0,
         },
       ],
       subtitle: {
         text: "看见孩子的表达力量",
-        x: 450,
-        y: 620,
+        x: exampleSubtitlePosition.x,
+        y: exampleSubtitlePosition.y,
         scale: 0.75,
         placement: "below",
       },
@@ -303,119 +366,18 @@ function getReferencePatternSummaries(keys: readonly TitleReferencePatternKey[])
   });
 }
 
-function getPatternSelection(input: GenerateTitleCandidatesInput): PatternSelection {
-  if (input.designFamily === "achievementShowcase") {
-    return {
-      primary: ["stageSplitHero", "stageMedalTitle", "businessLaunchHero"],
-      secondary: ["cleanBrandCentered", "literaryMagazineBlock"],
-      exploratory: ["literaryBookTitle"],
-      disallowed: [
-        "modernChineseVerticalSeal",
-        "modernChineseScrollTitle",
-        "campaignDiagonalImpact",
-        "campaignTagStack",
-        "ipPlayfulStack",
-        "ipBadgeTitle",
-      ],
-    };
-  }
-
-  if (input.designFamily === "businessLaunch") {
-    return {
-      primary: ["businessLaunchHero", "stageSplitHero"],
-      secondary: ["stageMedalTitle", "cleanBrandCentered"],
-      exploratory: ["literaryMagazineBlock"],
-      disallowed: [
-        "modernChineseVerticalSeal",
-        "modernChineseScrollTitle",
-        "campaignDiagonalImpact",
-        "campaignTagStack",
-        "ipPlayfulStack",
-        "ipBadgeTitle",
-      ],
-    };
-  }
-
-  if (input.designFamily === "modernChinese") {
-    return {
-      primary: ["modernChineseVerticalSeal", "modernChineseScrollTitle"],
-      secondary: ["literaryMagazineBlock", "literaryBookTitle"],
-      exploratory: ["cleanBrandCentered"],
-      disallowed: [
-        "campaignDiagonalImpact",
-        "campaignTagStack",
-        "ipPlayfulStack",
-        "ipBadgeTitle",
-        "stageMedalTitle",
-      ],
-    };
-  }
-
-  if (input.designFamily === "boldCampaign") {
-    return {
-      primary: ["campaignDiagonalImpact", "campaignTagStack"],
-      secondary: ["businessLaunchHero", "cleanBrandCentered"],
-      exploratory: ["ipBadgeTitle"],
-      disallowed: [
-        "modernChineseVerticalSeal",
-        "modernChineseScrollTitle",
-        "literaryMagazineBlock",
-        "literaryBookTitle",
-        "stageMedalTitle",
-      ],
-    };
-  }
-
-  if (input.designFamily === "literaryEditorial") {
-    return {
-      primary: ["literaryMagazineBlock", "literaryBookTitle"],
-      secondary: ["modernChineseScrollTitle", "cleanBrandCentered"],
-      exploratory: ["modernChineseVerticalSeal"],
-      disallowed: [
-        "campaignDiagonalImpact",
-        "campaignTagStack",
-        "ipPlayfulStack",
-        "ipBadgeTitle",
-      ],
-    };
-  }
-
-  if (input.designFamily === "ipCartoonEvent") {
-    return {
-      primary: ["ipPlayfulStack", "ipBadgeTitle"],
-      secondary: ["campaignTagStack", "cleanBrandCentered"],
-      exploratory: ["literaryBookTitle"],
-      disallowed: [
-        "businessLaunchHero",
-        "stageMedalTitle",
-        "modernChineseVerticalSeal",
-      ],
-    };
-  }
-
-  return {
-    primary: ["cleanBrandCentered", "businessLaunchHero"],
-    secondary: ["literaryBookTitle", "stageSplitHero"],
-    exploratory: ["literaryMagazineBlock"],
-    disallowed: [
-      "campaignDiagonalImpact",
-      "ipPlayfulStack",
-      "modernChineseVerticalSeal",
-    ],
-  };
-}
-
 function parseCandidates(
   content: string | null | undefined,
   mainTitle: string,
+  spatialStrategy: SpatialStrategy,
 ): TitleCandidate[] | undefined {
-  return parseCandidatesWithDiagnostic(content, mainTitle).candidates;
+  return parseCandidatesWithDiagnostic(content, mainTitle, spatialStrategy).candidates;
 }
 
 function parseCandidatesWithDiagnostic(
   content: string | null | undefined,
   mainTitle: string,
-  patternSelection?: PatternSelection,
+  spatialStrategy: SpatialStrategy,
 ): {
   candidates?: TitleCandidate[];
   diagnostic: CandidateValidationDiagnostic;
@@ -428,8 +390,8 @@ function parseCandidatesWithDiagnostic(
     return validateCandidatesWithDiagnostic(
       JSON.parse(stripJsonFence(content)),
       mainTitle,
+      spatialStrategy,
       rawPreview(content),
-      patternSelection,
     );
   } catch (error) {
     return {
@@ -445,15 +407,16 @@ function parseCandidatesWithDiagnostic(
 export function validateCandidates(
   value: unknown,
   mainTitle: string,
+  spatialStrategy: SpatialStrategy,
 ): TitleCandidate[] | undefined {
-  return validateCandidatesWithDiagnostic(value, mainTitle).candidates;
+  return validateCandidatesWithDiagnostic(value, mainTitle, spatialStrategy).candidates;
 }
 
 function validateCandidatesWithDiagnostic(
   value: unknown,
   mainTitle: string,
+  spatialStrategy: SpatialStrategy,
   preview?: string,
-  patternSelection?: PatternSelection,
 ): {
   candidates?: TitleCandidate[];
   diagnostic: CandidateValidationDiagnostic;
@@ -474,7 +437,7 @@ function validateCandidatesWithDiagnostic(
     return failure(`candidates count > 12: ${value.candidates.length}`, preview);
   }
 
-  const normalized = value.candidates.map((candidate, index) => normalizeCandidateWithReason(candidate, mainTitle, index, patternSelection));
+  const normalized = value.candidates.map((candidate, index) => normalizeCandidateWithReason(candidate, mainTitle, index, spatialStrategy));
   const candidates = normalized
     .map((result) => result.candidate)
     .filter((candidate): candidate is TitleCandidate => Boolean(candidate));
@@ -491,6 +454,13 @@ function validateCandidatesWithDiagnostic(
       `valid candidates after filtering < 6: ${candidates.length}; ${invalidReasons}`,
       preview,
     );
+  }
+
+  if (
+    spatialStrategy.orientationPreference === "verticalFirst" &&
+    candidates.filter(candidateUsesVerticalOrganization).length < 4
+  ) {
+    return failure("verticalFirst requires at least 4 candidates with vertical organization", preview);
   }
 
   return {
@@ -518,15 +488,16 @@ function normalizeCandidate(
   value: unknown,
   mainTitle: string,
   index: number,
+  spatialStrategy: SpatialStrategy,
 ): TitleCandidate | undefined {
-  return normalizeCandidateWithReason(value, mainTitle, index).candidate;
+  return normalizeCandidateWithReason(value, mainTitle, index, spatialStrategy).candidate;
 }
 
 function normalizeCandidateWithReason(
   value: unknown,
   mainTitle: string,
   index: number,
-  patternSelection?: PatternSelection,
+  spatialStrategy: SpatialStrategy,
 ): {
   candidate?: TitleCandidate;
   reason?: string;
@@ -542,17 +513,44 @@ function normalizeCandidateWithReason(
   const candidateId = typeof value.candidateId === "string" && value.candidateId.trim()
     ? value.candidateId.trim()
     : `c${index + 1}`;
+  const spatialAnchorId = typeof value.spatialAnchorId === "string" ? value.spatialAnchorId.trim() : "";
 
   if (!patternKeys) {
     return { reason: `${label} filtered because patternKeys invalid` };
   }
 
-  if (patternSelection && !matchesCandidatePatternSelection(patternKeys, index, patternSelection)) {
+  if (!matchesCandidatePatternSelection(patternKeys, index, spatialStrategy.patternPool)) {
     return { reason: `${label} filtered because patternKeys invalid for selected pool` };
+  }
+
+  if (!isAllowedSpatialAnchorId(spatialStrategy, spatialAnchorId)) {
+    return { reason: `${label} filtered because spatialAnchorId invalid` };
+  }
+
+  if (index < 4 && spatialAnchorId !== spatialStrategy.primaryTextAnchorId) {
+    return { reason: `${label} filtered because candidate 1-4 must use primaryTextAnchorId` };
+  }
+
+  if (value.strategyMode !== spatialStrategy.strategyMode) {
+    return { reason: `${label} filtered because strategyMode mismatches spatialStrategy` };
+  }
+
+  if (value.orientationPreference !== spatialStrategy.orientationPreference) {
+    return { reason: `${label} filtered because orientationPreference mismatches spatialStrategy` };
   }
 
   if (!titleUnits) {
     return { reason: `${label} filtered because titleUnits invalid` };
+  }
+
+  const anchor = getTextAnchorById(spatialStrategy, spatialAnchorId);
+
+  if (!anchor) {
+    return { reason: `${label} filtered because spatialAnchorId has no textAnchor` };
+  }
+
+  if (titleUnits.some((unit) => !isPointInsideAnchorBox(unit.x, unit.y, anchor))) {
+    return { reason: `${label} filtered because titleUnits outside spatialAnchor box` };
   }
 
   const joinedTitle = titleUnits.map((unit) => unit.text).join("");
@@ -588,6 +586,9 @@ function normalizeCandidateWithReason(
   return {
     candidate: {
       candidateId,
+      spatialAnchorId,
+      strategyMode: spatialStrategy.strategyMode,
+      orientationPreference: spatialStrategy.orientationPreference,
       patternKeys,
       hybridStrategy: value.hybridStrategy.trim(),
       titleUnits,
@@ -614,7 +615,7 @@ function normalizePatternKeys(value: unknown): TitleReferencePatternKey[] | unde
 function matchesCandidatePatternSelection(
   patternKeys: TitleReferencePatternKey[],
   index: number,
-  patternSelection: PatternSelection,
+  patternSelection: SpatialStrategy["patternPool"],
 ): boolean {
   if (patternKeys.some((key) => patternSelection.disallowed.includes(key))) {
     return false;
@@ -636,6 +637,70 @@ function matchesCandidatePatternSelection(
     patternSelection.secondary.includes(key) ||
     patternSelection.exploratory.includes(key)
   ));
+}
+
+function getAllowedSpatialAnchorIds(spatialStrategy: SpatialStrategy): string[] {
+  return [spatialStrategy.primaryTextAnchorId, ...spatialStrategy.secondaryTextAnchorIds]
+    .filter((id, index, ids) => id.trim().length > 0 && ids.indexOf(id) === index);
+}
+
+function isAllowedSpatialAnchorId(spatialStrategy: SpatialStrategy, spatialAnchorId: string): boolean {
+  return getAllowedSpatialAnchorIds(spatialStrategy).includes(spatialAnchorId);
+}
+
+function getTextAnchorById(
+  spatialStrategy: SpatialStrategy,
+  spatialAnchorId: string,
+): TextAnchor | undefined {
+  const anchor = spatialStrategy.backgroundLayout.textAnchors.find((item) => item.id === spatialAnchorId);
+
+  if (anchor) {
+    return anchor;
+  }
+
+  return spatialAnchorId === spatialStrategy.primaryTextAnchorId
+    ? fallbackTextAnchor(spatialAnchorId)
+    : undefined;
+}
+
+function fallbackTextAnchor(id: string): TextAnchor {
+  return {
+    id,
+    safeZoneId: "fallbackCenterSafeZone",
+    x: 260,
+    y: 160,
+    width: 480,
+    height: 520,
+    preferredOrientation: "vertical",
+    recommendedTitleFlow: "followShape",
+    priority: 1,
+    confidence: 0.5,
+    reason: "fallback text anchor for title candidate generation.",
+  };
+}
+
+function isPointInsideAnchorBox(x: number, y: number, anchor: TextAnchor): boolean {
+  return (
+    x >= anchor.x &&
+    y >= anchor.y &&
+    x <= anchor.x + anchor.width &&
+    y <= anchor.y + anchor.height
+  );
+}
+
+function candidateUsesVerticalOrganization(candidate: TitleCandidate): boolean {
+  if (candidate.titleUnits.some((unit) => unit.direction === "vertical")) {
+    return true;
+  }
+
+  if (candidate.titleUnits.length < 2) {
+    return false;
+  }
+
+  const yValues = candidate.titleUnits.map((unit) => unit.y);
+  const yRange = Math.max(...yValues) - Math.min(...yValues);
+
+  return yRange >= 80;
 }
 
 function normalizeTitleUnits(value: unknown): TitleCandidateUnit[] | undefined {
@@ -705,24 +770,36 @@ function normalizeSubtitle(value: unknown): TitleCandidateSubtitle | undefined {
 function fallback(
   input: GenerateTitleCandidatesInput,
   reason: string,
+  spatialStrategy: SpatialStrategy,
 ): GenerateTitleCandidatesResult {
-  const rawCandidates = buildFallbackCandidates(input);
-  const candidates = validateCandidates({ candidates: rawCandidates }, input.mainTitle) ?? rawCandidates;
+  const rawCandidates = buildFallbackCandidates(input, spatialStrategy);
+  const candidates = validateCandidates({ candidates: rawCandidates }, input.mainTitle, spatialStrategy) ?? rawCandidates;
 
-  return { source: "fallback", candidates, reason };
+  return { source: "fallback", candidates, reason, spatialStrategy };
 }
 
-function buildFallbackCandidates(input: GenerateTitleCandidatesInput): TitleCandidate[] {
-  const patternGroups = getFallbackPatternGroups(input.designFamily);
+function buildFallbackCandidates(
+  input: GenerateTitleCandidatesInput,
+  spatialStrategy: SpatialStrategy,
+): TitleCandidate[] {
+  const patternGroups = getFallbackPatternGroups(spatialStrategy);
   const semanticSplits = getSemanticTitleSplits(input.mainTitle);
+  const anchor = getTextAnchorById(spatialStrategy, spatialStrategy.primaryTextAnchorId)
+    ?? fallbackTextAnchor(spatialStrategy.primaryTextAnchorId);
 
   return patternGroups.map((patternKeys, index) => {
-    const titleUnits = buildFallbackUnits(semanticSplits[index % semanticSplits.length], index);
+    const titleUnits = buildFallbackUnits(
+      semanticSplits[index % semanticSplits.length],
+      index,
+      anchor,
+      spatialStrategy.orientationPreference,
+    );
+    const subtitlePosition = getSubtitlePositionInAnchor(anchor);
     const subtitle = input.subtitle
       ? {
           text: input.subtitle,
-          x: 350 + index * 22,
-          y: 430 + index * 18,
+          x: subtitlePosition.x,
+          y: subtitlePosition.y,
           scale: 0.76,
           placement: "below" as const,
         }
@@ -730,6 +807,9 @@ function buildFallbackCandidates(input: GenerateTitleCandidatesInput): TitleCand
 
     return {
       candidateId: `fallback-${index + 1}`,
+      spatialAnchorId: spatialStrategy.primaryTextAnchorId,
+      strategyMode: spatialStrategy.strategyMode,
+      orientationPreference: spatialStrategy.orientationPreference,
       patternKeys,
       hybridStrategy: `基于 ${patternKeys.join(" + ")} 组合生成字组节奏，不做固定模板套用。`,
       titleUnits,
@@ -743,43 +823,97 @@ function buildFallbackCandidates(input: GenerateTitleCandidatesInput): TitleCand
   });
 }
 
-function getFallbackPatternGroups(designFamily?: string): TitleReferencePatternKey[][] {
-  const base = getFallbackPatternKeys(designFamily);
+function getFallbackPatternGroups(spatialStrategy: SpatialStrategy): TitleReferencePatternKey[][] {
+  const primary = spatialStrategy.patternPool.primary;
+  const secondary = spatialStrategy.patternPool.secondary;
+  const exploratory = spatialStrategy.patternPool.exploratory;
+  const primaryFallback = primary[0] || "cleanBrandCentered";
+  const secondaryFallback = secondary[0] || primaryFallback;
+  const exploratoryFallback = exploratory[0] || secondaryFallback;
 
   return [
-    [base[0]],
-    [base[1]],
-    [base[2]],
-    [base[0], base[1]],
-    [base[0], base[2]],
-    [base[1], base[2]],
+    [primaryFallback],
+    [primary[1] || primaryFallback],
+    [primary[2] || primaryFallback],
+    [primaryFallback, primary[1] || primaryFallback],
+    [primaryFallback, secondaryFallback],
+    [secondaryFallback, exploratoryFallback],
   ];
-}
-
-function getFallbackPatternKeys(designFamily?: string): TitleReferencePatternKey[] {
-  if (designFamily === "achievementShowcase") return ["stageSplitHero", "stageMedalTitle", "businessLaunchHero"];
-  if (designFamily === "businessLaunch") return ["businessLaunchHero", "stageSplitHero", "cleanBrandCentered"];
-  if (designFamily === "modernChinese") return ["modernChineseVerticalSeal", "modernChineseScrollTitle", "literaryMagazineBlock"];
-  if (designFamily === "boldCampaign") return ["campaignDiagonalImpact", "campaignTagStack", "businessLaunchHero"];
-  if (designFamily === "literaryEditorial") return ["literaryMagazineBlock", "literaryBookTitle", "modernChineseScrollTitle"];
-  if (designFamily === "ipCartoonEvent") return ["ipPlayfulStack", "ipBadgeTitle", "campaignTagStack"];
-
-  return ["cleanBrandCentered", "businessLaunchHero", "literaryBookTitle"];
 }
 
 function buildFallbackUnits(
   parts: string[],
   candidateIndex: number,
+  anchor: TextAnchor,
+  orientationPreference: TitleOrientationPreference,
 ): TitleCandidateUnit[] {
-  return parts.map((text, index) => ({
-    text,
-    role: getFallbackUnitRole(index, parts.length),
-    direction: candidateIndex % 4 === 1 ? "vertical" : "horizontal",
-    x: Math.min(900, 160 + index * 190 + candidateIndex * 18),
-    y: Math.min(900, 220 + index * 42 + candidateIndex * 24),
-    scale: Math.min(1.8, 1 + index * 0.18 + (candidateIndex % 2) * 0.08),
-    rotationDeg: candidateIndex % 3 === 2 ? -6 : 0,
-  }));
+  return parts.map((text, index) => {
+    const position = getUnitPositionInAnchor(anchor, index, parts.length, candidateIndex, orientationPreference);
+    const verticalFirst = orientationPreference === "verticalFirst";
+
+    return {
+      text,
+      role: getFallbackUnitRole(index, parts.length),
+      direction: verticalFirst && candidateIndex !== 2 ? "vertical" : "horizontal",
+      x: position.x,
+      y: position.y,
+      scale: Math.min(1.8, 1 + index * 0.18 + (candidateIndex % 2) * 0.08),
+      rotationDeg: orientationPreference === "diagonalAllowed" && candidateIndex % 3 === 2 ? -6 : 0,
+    };
+  });
+}
+
+function getUnitPositionInAnchor(
+  anchor: TextAnchor,
+  unitIndex: number,
+  unitCount: number,
+  candidateIndex: number,
+  orientationPreference: TitleOrientationPreference,
+): AnchorPosition {
+  if (orientationPreference === "verticalFirst") {
+    return {
+      x: anchorX(anchor, 0.5 + (unitIndex - (unitCount - 1) / 2) * 0.14),
+      y: anchorY(anchor, 0.2 + unitIndex * (0.58 / Math.max(1, unitCount - 1)) + candidateIndex * 0.015),
+    };
+  }
+
+  if (orientationPreference === "horizontalFirst") {
+    return {
+      x: anchorX(anchor, 0.2 + unitIndex * (0.6 / Math.max(1, unitCount - 1))),
+      y: anchorY(anchor, 0.42 + candidateIndex * 0.04),
+    };
+  }
+
+  if (orientationPreference === "diagonalAllowed") {
+    return {
+      x: anchorX(anchor, 0.18 + unitIndex * (0.62 / Math.max(1, unitCount - 1))),
+      y: anchorY(anchor, 0.25 + unitIndex * 0.18 + candidateIndex * 0.025),
+    };
+  }
+
+  return {
+    x: anchorX(anchor, 0.5),
+    y: anchorY(anchor, 0.22 + unitIndex * (0.5 / Math.max(1, unitCount - 1)) + candidateIndex * 0.02),
+  };
+}
+
+function getSubtitlePositionInAnchor(anchor: TextAnchor): AnchorPosition {
+  return {
+    x: anchorX(anchor, 0.5),
+    y: anchorY(anchor, 0.86),
+  };
+}
+
+function anchorX(anchor: TextAnchor, ratio: number): number {
+  return Math.round(clamp(anchor.x + anchor.width * ratio, anchor.x + 1, anchor.x + anchor.width - 1));
+}
+
+function anchorY(anchor: TextAnchor, ratio: number): number {
+  return Math.round(clamp(anchor.y + anchor.height * ratio, anchor.y + 1, anchor.y + anchor.height - 1));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
 }
 
 function getSemanticTitleSplits(title: string): string[][] {

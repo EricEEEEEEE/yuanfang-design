@@ -28,6 +28,13 @@ async function main(): Promise<void> {
   console.error("TITLE_CANDIDATES_SOURCE", result.source);
   console.error("TITLE_CANDIDATES_REASON", result.reason);
   console.error("TITLE_CANDIDATES_COUNT", result.candidates.length);
+  console.error("SPATIAL_STRATEGY_SOURCE", result.spatialStrategy.source);
+  console.error("CONTENT_INTENT", result.spatialStrategy.contentIntent);
+  console.error("STRATEGY_MODE", result.spatialStrategy.strategyMode);
+  console.error("ORIENTATION_PREFERENCE", result.spatialStrategy.orientationPreference);
+  console.error("PRIMARY_TEXT_ANCHOR", result.spatialStrategy.primaryTextAnchorId);
+  console.error("PRIMARY_PATTERNS", result.spatialStrategy.patternPool.primary.join(","));
+  console.error("DISALLOWED_PATTERNS", result.spatialStrategy.patternPool.disallowed.join(","));
   console.log(JSON.stringify(result, null, 2));
 }
 
