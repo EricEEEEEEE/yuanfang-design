@@ -33,7 +33,15 @@ async function main(): Promise<void> {
   });
 
   console.log("PREVIEW_SOURCE", candidateResult.source);
+  console.log("PREVIEW_REASON", candidateResult.reason);
   console.log("PREVIEW_CANDIDATE_COUNT", candidateResult.candidates.length);
+  console.log("SPATIAL_STRATEGY_SOURCE", candidateResult.spatialStrategy.source);
+  console.log("CONTENT_INTENT", candidateResult.spatialStrategy.contentIntent);
+  console.log("STRATEGY_MODE", candidateResult.spatialStrategy.strategyMode);
+  console.log("ORIENTATION_PREFERENCE", candidateResult.spatialStrategy.orientationPreference);
+  console.log("PRIMARY_TEXT_ANCHOR", candidateResult.spatialStrategy.primaryTextAnchorId);
+  console.log("PRIMARY_PATTERNS", candidateResult.spatialStrategy.patternPool.primary.join(","));
+  console.log("DISALLOWED_PATTERNS", candidateResult.spatialStrategy.patternPool.disallowed.join(","));
   console.log("PREVIEW_PATHS", previewResult.previewPaths.join(","));
   console.log("CONTACT_SHEET_PATH", previewResult.contactSheetPath);
 }
