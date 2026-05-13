@@ -77,10 +77,32 @@ export type TitleDecorationIntent =
   | "literary"
   | "playful";
 
+export type TitleLayoutBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type TitleAlignment =
+  | "left"
+  | "center"
+  | "right";
+
+export type SubtitlePlacement =
+  | "below"
+  | "side"
+  | "verticalSide"
+  | "none";
+
 export type TitleDirectorDecision = {
   placement: TitlePlacementKey;
   orientation: TitleOrientation;
   compositionMode: TitleCompositionMode;
+  titleBox: TitleLayoutBox;
+  titleAlign: TitleAlignment;
+  subtitlePlacement: SubtitlePlacement;
+  rotationDeg: number;
   fontKey: string;
   titleArtStyle: string;
   titleScale: TitleScaleLevel;
@@ -109,6 +131,10 @@ export const TITLE_DIRECTOR_PRESETS: Record<string, TitleDirectorPreset> = {
       placement: "centerHero",
       orientation: "horizontal",
       compositionMode: "heroCenter",
+      titleBox: { x: 180, y: 120, width: 640, height: 220 },
+      titleAlign: "center",
+      subtitlePlacement: "below",
+      rotationDeg: 0,
       fontKey: "sourceHanSansBold",
       titleArtStyle: "stageGlow",
       titleScale: "hero",
@@ -131,6 +157,10 @@ export const TITLE_DIRECTOR_PRESETS: Record<string, TitleDirectorPreset> = {
       placement: "sealTitle",
       orientation: "vertical",
       compositionMode: "sealBadge",
+      titleBox: { x: 710, y: 95, width: 180, height: 520 },
+      titleAlign: "center",
+      subtitlePlacement: "verticalSide",
+      rotationDeg: 0,
       fontKey: "sourceHanSerifSemiBold",
       titleArtStyle: "modernChinese",
       titleScale: "large",
@@ -153,6 +183,10 @@ export const TITLE_DIRECTOR_PRESETS: Record<string, TitleDirectorPreset> = {
       placement: "topLeft",
       orientation: "diagonal",
       compositionMode: "diagonalDynamic",
+      titleBox: { x: 80, y: 120, width: 720, height: 260 },
+      titleAlign: "left",
+      subtitlePlacement: "below",
+      rotationDeg: -8,
       fontKey: "smileySans",
       titleArtStyle: "boldCampaign",
       titleScale: "hero",
@@ -175,6 +209,10 @@ export const TITLE_DIRECTOR_PRESETS: Record<string, TitleDirectorPreset> = {
       placement: "editorialTop",
       orientation: "horizontal",
       compositionMode: "editorialBlock",
+      titleBox: { x: 120, y: 110, width: 760, height: 240 },
+      titleAlign: "center",
+      subtitlePlacement: "below",
+      rotationDeg: 0,
       fontKey: "lxgwWenkaiGbMedium",
       titleArtStyle: "literaryEditorial",
       titleScale: "large",
@@ -196,6 +234,10 @@ export const TITLE_DIRECTOR_PRESETS: Record<string, TitleDirectorPreset> = {
       placement: "centerHero",
       orientation: "stacked",
       compositionMode: "heroCenter",
+      titleBox: { x: 170, y: 140, width: 660, height: 300 },
+      titleAlign: "center",
+      subtitlePlacement: "below",
+      rotationDeg: 0,
       fontKey: "lxgwMarkerGothic",
       titleArtStyle: "ipEvent",
       titleScale: "large",
@@ -217,6 +259,10 @@ export const TITLE_DIRECTOR_PRESETS: Record<string, TitleDirectorPreset> = {
       placement: "topCenter",
       orientation: "horizontal",
       compositionMode: "topBanner",
+      titleBox: { x: 150, y: 100, width: 700, height: 200 },
+      titleAlign: "center",
+      subtitlePlacement: "below",
+      rotationDeg: 0,
       fontKey: "sourceHanSansBold",
       titleArtStyle: "cleanBrand",
       titleScale: "normal",

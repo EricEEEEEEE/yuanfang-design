@@ -3,6 +3,8 @@ import { STANDARD_FONT_LIBRARY, type StandardFontKey } from "@/config/font-libra
 import { MODELS } from "@/config/models";
 import {
   TITLE_DIRECTOR_PRESETS,
+  type SubtitlePlacement,
+  type TitleAlignment,
   type TitleCompositionMode,
   type TitleDecorationIntent,
   type TitleDecorationKey,
@@ -51,6 +53,8 @@ const SCALE_INTENSITIES: readonly TitleScaleIntensity[] = ["normal", "large", "h
 const READABILITY: readonly TitleReadabilitySupport[] = ["none", "lightShadow", "shadowAndStroke", "softGlow", "subtleOverlay"];
 const DECORATION_INTENTS: readonly TitleDecorationIntent[] = ["none", "stage", "chinese", "campaign", "literary", "playful"];
 const DECORATIONS: readonly TitleDecorationKey[] = ["none", "stageLight", "smallStars", "goldLine", "sealStamp", "paperTag", "bookMark", "campaignLabel", "growthArrow"];
+const TITLE_ALIGNMENTS: readonly TitleAlignment[] = ["left", "center", "right"];
+const SUBTITLE_PLACEMENTS: readonly SubtitlePlacement[] = ["below", "side", "verticalSide", "none"];
 const FONT_KEYS = Object.keys(STANDARD_FONT_LIBRARY) as StandardFontKey[];
 const TITLE_ART_KEYS = Object.keys(STANDARD_TITLE_ART_STYLES) as StandardTitleArtStyleKey[];
 
@@ -113,6 +117,12 @@ function buildSystemPrompt(): string {
     `readabilitySupport 只能选：${READABILITY.join(" / ")}`,
     `decorationIntent 只能选：${DECORATION_INTENTS.join(" / ")}`,
     `decorations 只能从这些值组成数组：${DECORATIONS.join(" / ")}`,
+    "titleBox 必须是 0-1000 的归一化坐标对象，包含 x、y、width、height，四个值都必须是数字。",
+    "titleBox.x 和 titleBox.y 必须在 0-1000 范围内；width 和 height 必须大于 50；x + width 不应超过 1000；y + height 不应超过 1000。",
+    "不能把标题区域放到 Logo 主要区域，不能把标题区域压在复杂主体上。",
+    `titleAlign 只能选：${TITLE_ALIGNMENTS.join(" / ")}`,
+    `subtitlePlacement 只能选：${SUBTITLE_PLACEMENTS.join(" / ")}`,
+    "rotationDeg 必须是数字，范围 -15 到 15；horizontal / vertical 一般用 0；diagonal 一般用 -8 或 8。",
   ].join("\n");
 }
 
@@ -137,6 +147,10 @@ function buildUserPrompt(input: ResolveTitleDirectorInput): string {
     `推荐 placement: ${baseline.placement}`,
     `推荐 orientation: ${baseline.orientation}`,
     `推荐 compositionMode: ${baseline.compositionMode}`,
+    `推荐 titleBox: ${JSON.stringify(baseline.titleBox)}`,
+    `推荐 titleAlign: ${baseline.titleAlign}`,
+    `推荐 subtitlePlacement: ${baseline.subtitlePlacement}`,
+    `推荐 rotationDeg: ${baseline.rotationDeg}`,
     `推荐 fontKey: ${baseline.fontKey}`,
     `推荐 titleArtStyle: ${baseline.titleArtStyle}`,
     `推荐 titleScale: ${baseline.titleScale}`,
@@ -152,8 +166,9 @@ function buildUserPrompt(input: ResolveTitleDirectorInput): string {
     "placement 不能只为了安全选择 topCenter；必须根据背景的视觉重心和可读区域选择。",
     "reason 必须说明为什么选择横排 / 竖排 / 斜排 / 错落排；如果选择 horizontal，必须说明为什么横排比竖排或斜排更适合当前背景。",
     "如果背景中部大面积空白且适合艺术字，不能机械选择 topBanner；如果背景更适合中文竖排，应选择 vertical，并说明原因。",
+    "reason 必须说明为什么选择这个 titleBox、该区域为什么比其他区域更适合标题、是否避开 Logo / 主体 / 复杂背景、为什么选择当前 subtitlePlacement；如果 rotationDeg 不为 0，必须说明为什么需要斜排。",
     "reason 必须说明标题为什么放在这个区域，例如避开顶部灯架、利用中部聚光、避开主体人物、背景复杂度较低等，不能只写泛泛的专业可信、突出主标题。",
-    "请只输出 JSON，格式包含 placement、orientation、compositionMode、fontKey、titleArtStyle、titleScale、subtitleScale、lineBreakMode、emphasisMode、emphasisTarget、scaleIntensity、readabilitySupport、decorationIntent、decorations、reason。",
+    "请只输出 JSON，格式包含 placement、orientation、compositionMode、titleBox、titleAlign、subtitlePlacement、rotationDeg、fontKey、titleArtStyle、titleScale、subtitleScale、lineBreakMode、emphasisMode、emphasisTarget、scaleIntensity、readabilitySupport、decorationIntent、decorations、reason。",
   ].join("\n");
 }
 
@@ -179,6 +194,10 @@ function validateDecision(value: unknown): TitleDirectorDecision | undefined {
     !isOneOf(value.placement, PLACEMENTS) ||
     !isOneOf(value.orientation, ORIENTATIONS) ||
     !isOneOf(value.compositionMode, COMPOSITION_MODES) ||
+    !isValidTitleBox(value.titleBox) ||
+    !isOneOf(value.titleAlign, TITLE_ALIGNMENTS) ||
+    !isOneOf(value.subtitlePlacement, SUBTITLE_PLACEMENTS) ||
+    !isValidRotationDeg(value.rotationDeg) ||
     !isOneOf(value.fontKey, FONT_KEYS) ||
     !isOneOf(value.titleArtStyle, TITLE_ART_KEYS) ||
     !isOneOf(value.titleScale, SCALES) ||
@@ -197,7 +216,7 @@ function validateDecision(value: unknown): TitleDirectorDecision | undefined {
     return undefined;
   }
 
-  return { placement: value.placement, orientation: value.orientation, compositionMode: value.compositionMode, fontKey: value.fontKey, titleArtStyle: value.titleArtStyle, titleScale: value.titleScale, subtitleScale: value.subtitleScale, lineBreakMode: value.lineBreakMode, emphasisMode: value.emphasisMode, emphasisTarget: value.emphasisTarget, scaleIntensity: value.scaleIntensity, readabilitySupport: value.readabilitySupport, decorationIntent: value.decorationIntent, decorations: value.decorations, reason: value.reason.trim() };
+  return { placement: value.placement, orientation: value.orientation, compositionMode: value.compositionMode, titleBox: value.titleBox, titleAlign: value.titleAlign, subtitlePlacement: value.subtitlePlacement, rotationDeg: value.rotationDeg, fontKey: value.fontKey, titleArtStyle: value.titleArtStyle, titleScale: value.titleScale, subtitleScale: value.subtitleScale, lineBreakMode: value.lineBreakMode, emphasisMode: value.emphasisMode, emphasisTarget: value.emphasisTarget, scaleIntensity: value.scaleIntensity, readabilitySupport: value.readabilitySupport, decorationIntent: value.decorationIntent, decorations: value.decorations, reason: value.reason.trim() };
 }
 
 function fallback(
@@ -229,6 +248,40 @@ function stripJsonFence(content: string): string {
 
 function isOneOf<T extends string>(value: unknown, allowed: readonly T[]): value is T {
   return typeof value === "string" && allowed.includes(value as T);
+}
+
+function isValidTitleBox(value: unknown): value is TitleDirectorDecision["titleBox"] {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const { x, y, width, height } = value;
+
+  if (
+    !isFiniteNumber(x) ||
+    !isFiniteNumber(y) ||
+    !isFiniteNumber(width) ||
+    !isFiniteNumber(height)
+  ) {
+    return false;
+  }
+
+  return x >= 0 &&
+    y >= 0 &&
+    x <= 1000 &&
+    y <= 1000 &&
+    width > 50 &&
+    height > 50 &&
+    x + width <= 1000 &&
+    y + height <= 1000;
+}
+
+function isValidRotationDeg(value: unknown): value is number {
+  return isFiniteNumber(value) && value >= -15 && value <= 15;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
