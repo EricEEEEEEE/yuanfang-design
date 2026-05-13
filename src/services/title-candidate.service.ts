@@ -110,6 +110,13 @@ type CandidateValidationDiagnostic = {
   rawPreview?: string;
 };
 
+type PatternSelection = {
+  primary: TitleReferencePatternKey[];
+  secondary: TitleReferencePatternKey[];
+  exploratory: TitleReferencePatternKey[];
+  disallowed: TitleReferencePatternKey[];
+};
+
 const UNIT_ROLES: readonly TitleCandidateUnitRole[] = ["lead", "main", "accent", "support"];
 const UNIT_DIRECTIONS: readonly TitleCandidateUnitDirection[] = ["horizontal", "vertical"];
 const SUBTITLE_PLACEMENTS: readonly TitleCandidateSubtitle["placement"][] = ["below", "side", "verticalSide", "none"];
@@ -121,6 +128,7 @@ export async function generateTitleCandidates(
   input: GenerateTitleCandidatesInput,
 ): Promise<GenerateTitleCandidatesResult> {
   const apiKey = process.env.OPENAI_API_KEY;
+  const patternSelection = getPatternSelection(input);
 
   if (!apiKey) {
     return fallback(input, "OPENAI_API_KEY missing; used reference-pattern fallback candidates.");
@@ -135,7 +143,7 @@ export async function generateTitleCandidates(
         {
           role: "user",
           content: [
-            { type: "text", text: buildUserPrompt(input) },
+            { type: "text", text: buildUserPrompt(input, patternSelection) },
             { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
           ],
         },
@@ -146,6 +154,7 @@ export async function generateTitleCandidates(
     const parsed = parseCandidatesWithDiagnostic(
       response.choices[0]?.message?.content,
       input.mainTitle,
+      patternSelection,
     );
 
     if (!parsed.candidates) {
@@ -155,7 +164,7 @@ export async function generateTitleCandidates(
       );
     }
 
-    return { source: "ai", candidates: parsed.candidates, reason: "AI generated 6-12 validated reference-driven title candidates." };
+    return { source: "ai", candidates: parsed.candidates, reason: "AI generated validated reference-driven title candidates." };
   } catch (error) {
     return fallback(
       input,
@@ -188,7 +197,7 @@ function buildSystemPrompt(): string {
   ].join("\n");
 }
 
-function buildUserPrompt(input: GenerateTitleCandidatesInput): string {
+function buildUserPrompt(input: GenerateTitleCandidatesInput, patternSelection: PatternSelection): string {
   return [
     `mainTitle: ${input.mainTitle}`,
     `subtitle: ${input.subtitle || "未填写"}`,
@@ -200,10 +209,27 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput): string {
     `styleBrief: ${input.styleBrief || "未填写"}`,
     `visualDetails: ${input.visualDetails || "未填写"}`,
     `avoidNotes: ${input.avoidNotes || "未填写"}`,
-    "可用 reference patterns 摘要：",
-    JSON.stringify(getReferencePatternSummaries(), null, 2),
+    "推荐 primary patterns 摘要：",
+    JSON.stringify(getReferencePatternSummaries(patternSelection.primary), null, 2),
+    "可混合 secondary patterns 摘要：",
+    JSON.stringify(getReferencePatternSummaries(patternSelection.secondary), null, 2),
+    "少量 exploratory patterns 摘要：",
+    JSON.stringify(getReferencePatternSummaries(patternSelection.exploratory), null, 2),
+    `禁用 disallowed pattern keys：${patternSelection.disallowed.join(" / ")}`,
     "输出 JSON 格式：{ \"candidates\": [TitleCandidate...] }。",
     "candidates 数组长度必须正好是 6。",
+    "candidate 1-4：必须使用 primary patterns，可以 1 个 pattern 或 primary+primary 混合。",
+    "candidate 5：可以使用 primary + secondary。",
+    "candidate 6：可以使用 secondary 或 exploratory，但不能使用 disallowed。",
+    "6 个 candidates 中至少 4 个必须只使用 primary patterns，最多 2 个可以使用 secondary patterns，最多 1 个可以使用 exploratory patterns。",
+    "禁止使用 disallowed pattern keys。",
+    "如果使用 exploratory pattern，必须在 whyNotTemplate 或 backgroundFitReason 中说明为什么它没有偏题。",
+    "不允许为了变化而使用明显不相关的 pattern。",
+    "reference pattern 是参考语法，不是模板；候选之间要有结构变化，但必须围绕当前活动目标。",
+    "如果 designFamily 是 achievementShowcase：不要使用 modernChineseVerticalSeal，除非 eventBrief 明确是国学/诗词/传统文化。",
+    "如果 designFamily 是 achievementShowcase：不要使用 campaignDiagonalImpact，除非 eventBrief 明确是招生/报名/开班提醒。",
+    "如果 designFamily 是 achievementShowcase：不要使用 ipPlayfulStack，除非 eventBrief 明确是游园会/IP/轻活动。",
+    "成长汇报课优先 stage / business / clean / literary 的成果展示语法。",
     "每个 candidate 必须包含 candidateId、patternKeys、hybridStrategy、titleUnits、effectIntent、decorationIntents、readabilityPlan、backgroundFitReason、whyNotTemplate。",
     "titleUnits 每项包含 text、role、direction、x、y、scale、rotationDeg。",
     "x / y 使用 0-1000 局部归一化坐标；scale 0.7-1.8；rotationDeg -15 到 15。",
@@ -258,8 +284,8 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput): string {
   ].join("\n");
 }
 
-function getReferencePatternSummaries(): PatternSummary[] {
-  return PATTERN_KEYS.map((key) => {
+function getReferencePatternSummaries(keys: readonly TitleReferencePatternKey[]): PatternSummary[] {
+  return keys.map((key) => {
     const pattern = TITLE_REFERENCE_PATTERNS[key];
 
     return {
@@ -277,6 +303,108 @@ function getReferencePatternSummaries(): PatternSummary[] {
   });
 }
 
+function getPatternSelection(input: GenerateTitleCandidatesInput): PatternSelection {
+  if (input.designFamily === "achievementShowcase") {
+    return {
+      primary: ["stageSplitHero", "stageMedalTitle", "businessLaunchHero"],
+      secondary: ["cleanBrandCentered", "literaryMagazineBlock"],
+      exploratory: ["literaryBookTitle"],
+      disallowed: [
+        "modernChineseVerticalSeal",
+        "modernChineseScrollTitle",
+        "campaignDiagonalImpact",
+        "campaignTagStack",
+        "ipPlayfulStack",
+        "ipBadgeTitle",
+      ],
+    };
+  }
+
+  if (input.designFamily === "businessLaunch") {
+    return {
+      primary: ["businessLaunchHero", "stageSplitHero"],
+      secondary: ["stageMedalTitle", "cleanBrandCentered"],
+      exploratory: ["literaryMagazineBlock"],
+      disallowed: [
+        "modernChineseVerticalSeal",
+        "modernChineseScrollTitle",
+        "campaignDiagonalImpact",
+        "campaignTagStack",
+        "ipPlayfulStack",
+        "ipBadgeTitle",
+      ],
+    };
+  }
+
+  if (input.designFamily === "modernChinese") {
+    return {
+      primary: ["modernChineseVerticalSeal", "modernChineseScrollTitle"],
+      secondary: ["literaryMagazineBlock", "literaryBookTitle"],
+      exploratory: ["cleanBrandCentered"],
+      disallowed: [
+        "campaignDiagonalImpact",
+        "campaignTagStack",
+        "ipPlayfulStack",
+        "ipBadgeTitle",
+        "stageMedalTitle",
+      ],
+    };
+  }
+
+  if (input.designFamily === "boldCampaign") {
+    return {
+      primary: ["campaignDiagonalImpact", "campaignTagStack"],
+      secondary: ["businessLaunchHero", "cleanBrandCentered"],
+      exploratory: ["ipBadgeTitle"],
+      disallowed: [
+        "modernChineseVerticalSeal",
+        "modernChineseScrollTitle",
+        "literaryMagazineBlock",
+        "literaryBookTitle",
+        "stageMedalTitle",
+      ],
+    };
+  }
+
+  if (input.designFamily === "literaryEditorial") {
+    return {
+      primary: ["literaryMagazineBlock", "literaryBookTitle"],
+      secondary: ["modernChineseScrollTitle", "cleanBrandCentered"],
+      exploratory: ["modernChineseVerticalSeal"],
+      disallowed: [
+        "campaignDiagonalImpact",
+        "campaignTagStack",
+        "ipPlayfulStack",
+        "ipBadgeTitle",
+      ],
+    };
+  }
+
+  if (input.designFamily === "ipCartoonEvent") {
+    return {
+      primary: ["ipPlayfulStack", "ipBadgeTitle"],
+      secondary: ["campaignTagStack", "cleanBrandCentered"],
+      exploratory: ["literaryBookTitle"],
+      disallowed: [
+        "businessLaunchHero",
+        "stageMedalTitle",
+        "modernChineseVerticalSeal",
+      ],
+    };
+  }
+
+  return {
+    primary: ["cleanBrandCentered", "businessLaunchHero"],
+    secondary: ["literaryBookTitle", "stageSplitHero"],
+    exploratory: ["literaryMagazineBlock"],
+    disallowed: [
+      "campaignDiagonalImpact",
+      "ipPlayfulStack",
+      "modernChineseVerticalSeal",
+    ],
+  };
+}
+
 function parseCandidates(
   content: string | null | undefined,
   mainTitle: string,
@@ -287,6 +415,7 @@ function parseCandidates(
 function parseCandidatesWithDiagnostic(
   content: string | null | undefined,
   mainTitle: string,
+  patternSelection?: PatternSelection,
 ): {
   candidates?: TitleCandidate[];
   diagnostic: CandidateValidationDiagnostic;
@@ -300,6 +429,7 @@ function parseCandidatesWithDiagnostic(
       JSON.parse(stripJsonFence(content)),
       mainTitle,
       rawPreview(content),
+      patternSelection,
     );
   } catch (error) {
     return {
@@ -323,6 +453,7 @@ function validateCandidatesWithDiagnostic(
   value: unknown,
   mainTitle: string,
   preview?: string,
+  patternSelection?: PatternSelection,
 ): {
   candidates?: TitleCandidate[];
   diagnostic: CandidateValidationDiagnostic;
@@ -343,7 +474,7 @@ function validateCandidatesWithDiagnostic(
     return failure(`candidates count > 12: ${value.candidates.length}`, preview);
   }
 
-  const normalized = value.candidates.map((candidate, index) => normalizeCandidateWithReason(candidate, mainTitle, index));
+  const normalized = value.candidates.map((candidate, index) => normalizeCandidateWithReason(candidate, mainTitle, index, patternSelection));
   const candidates = normalized
     .map((result) => result.candidate)
     .filter((candidate): candidate is TitleCandidate => Boolean(candidate));
@@ -395,6 +526,7 @@ function normalizeCandidateWithReason(
   value: unknown,
   mainTitle: string,
   index: number,
+  patternSelection?: PatternSelection,
 ): {
   candidate?: TitleCandidate;
   reason?: string;
@@ -413,6 +545,10 @@ function normalizeCandidateWithReason(
 
   if (!patternKeys) {
     return { reason: `${label} filtered because patternKeys invalid` };
+  }
+
+  if (patternSelection && !matchesCandidatePatternSelection(patternKeys, index, patternSelection)) {
+    return { reason: `${label} filtered because patternKeys invalid for selected pool` };
   }
 
   if (!titleUnits) {
@@ -449,10 +585,6 @@ function normalizeCandidateWithReason(
 
   const subtitle = normalizeSubtitle(value.subtitle);
 
-  if (value.subtitle !== undefined && !subtitle) {
-    return { reason: `${label} filtered because subtitle invalid` };
-  }
-
   return {
     candidate: {
       candidateId,
@@ -477,6 +609,33 @@ function normalizePatternKeys(value: unknown): TitleReferencePatternKey[] | unde
   return value.every((key) => isOneOf(key, PATTERN_KEYS))
     ? value
     : undefined;
+}
+
+function matchesCandidatePatternSelection(
+  patternKeys: TitleReferencePatternKey[],
+  index: number,
+  patternSelection: PatternSelection,
+): boolean {
+  if (patternKeys.some((key) => patternSelection.disallowed.includes(key))) {
+    return false;
+  }
+
+  if (index < 4) {
+    return patternKeys.every((key) => patternSelection.primary.includes(key));
+  }
+
+  if (index === 4) {
+    return patternKeys.every((key) => (
+      patternSelection.primary.includes(key) ||
+      patternSelection.secondary.includes(key)
+    ));
+  }
+
+  return patternKeys.every((key) => (
+    patternSelection.primary.includes(key) ||
+    patternSelection.secondary.includes(key) ||
+    patternSelection.exploratory.includes(key)
+  ));
 }
 
 function normalizeTitleUnits(value: unknown): TitleCandidateUnit[] | undefined {
@@ -555,10 +714,10 @@ function fallback(
 
 function buildFallbackCandidates(input: GenerateTitleCandidatesInput): TitleCandidate[] {
   const patternGroups = getFallbackPatternGroups(input.designFamily);
+  const semanticSplits = getSemanticTitleSplits(input.mainTitle);
 
   return patternGroups.map((patternKeys, index) => {
-    const unitCount = index % 3 === 0 ? 2 : index % 3 === 1 ? 3 : 1;
-    const titleUnits = buildFallbackUnits(input.mainTitle, unitCount, index);
+    const titleUnits = buildFallbackUnits(semanticSplits[index % semanticSplits.length], index);
     const subtitle = input.subtitle
       ? {
           text: input.subtitle,
@@ -609,12 +768,9 @@ function getFallbackPatternKeys(designFamily?: string): TitleReferencePatternKey
 }
 
 function buildFallbackUnits(
-  mainTitle: string,
-  requestedUnitCount: number,
+  parts: string[],
   candidateIndex: number,
 ): TitleCandidateUnit[] {
-  const parts = splitTitleIntoUnits(mainTitle, requestedUnitCount);
-
   return parts.map((text, index) => ({
     text,
     role: getFallbackUnitRole(index, parts.length),
@@ -626,21 +782,47 @@ function buildFallbackUnits(
   }));
 }
 
-function splitTitleIntoUnits(title: string, requestedUnitCount: number): string[] {
-  const characters = Array.from(title);
-  const unitCount = Math.max(1, Math.min(requestedUnitCount, characters.length, 6));
-  const baseSize = Math.floor(characters.length / unitCount);
-  const remainder = characters.length % unitCount;
-  const parts: string[] = [];
-  let offset = 0;
-
-  for (let index = 0; index < unitCount; index += 1) {
-    const size = baseSize + (index < remainder ? 1 : 0);
-    parts.push(characters.slice(offset, offset + size).join(""));
-    offset += size;
+function getSemanticTitleSplits(title: string): string[][] {
+  if (title === "成长汇报课") {
+    return [["成长", "汇报课"], ["成长", "汇报", "课"], ["成长汇报课"]];
   }
 
-  return parts.filter(Boolean);
+  if (title === "国学少年说") {
+    return [["国学", "少年说"], ["国学少年说"]];
+  }
+
+  if (title === "春季新班招生") {
+    return [["春季", "新班", "招生"], ["春季", "新班招生"], ["春季新班招生"]];
+  }
+
+  if (title === "暑假文学营") {
+    return [["暑假", "文学营"], ["暑假文学营"]];
+  }
+
+  if (title === "诗词游园会") {
+    return [["诗词", "游园会"], ["诗词游园会"]];
+  }
+
+  const suffixes = [
+    "新班招生",
+    "汇报课",
+    "体验课",
+    "公开课",
+    "读书会",
+    "游园会",
+    "文学营",
+    "少年说",
+    "招生",
+  ];
+  const suffix = suffixes.find((item) => title.endsWith(item) && title.length > item.length);
+
+  if (!suffix) {
+    return [[title]];
+  }
+
+  const prefix = title.slice(0, title.length - suffix.length);
+
+  return [[prefix, suffix], [title]];
 }
 
 function getFallbackUnitRole(index: number, unitCount: number): TitleCandidateUnitRole {
