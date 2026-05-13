@@ -71,7 +71,7 @@ type RenderTextLinesParams = {
   lineHeight: number;
   className: string;
   letterSpacing: number;
-  textAnchor?: "start" | "middle";
+  textAnchor?: "start" | "middle" | "end";
 };
 
 type TitleBackgroundParams = {
@@ -95,13 +95,25 @@ type TitleArtTextStyles = {
 type TitlePlacementConfig = {
   x: number;
   y: number;
-  textAnchor?: "start" | "middle";
+  textAnchor?: "start" | "middle" | "end";
+  box?: ResolvedTitleBox;
 };
 
 type ResolvedTitleLayout = {
   placement: TitlePlacementConfig;
   orientation: TitleOrientation;
   rotation?: number;
+  rotationCenter: {
+    x: number;
+    y: number;
+  };
+};
+
+type ResolvedTitleBox = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 };
 
 type TitleRenderState = {
@@ -109,7 +121,9 @@ type TitleRenderState = {
   mainTitleLines: string[];
   subtitleLines: string[];
   titleLineHeight: number;
+  subtitleX: number;
   subtitleY: number;
+  subtitleTextAnchor?: "start" | "middle" | "end";
 };
 
 type DirectedTitleTextParams = {
@@ -638,19 +652,25 @@ function buildTitleRenderState(
   fallbackPlacement: TitlePlacementKey,
   subtitleOffset: number,
 ): TitleRenderState {
-  const layout = resolveTitleLayout(decision, fallbackPlacement);
+  const layout = resolveTitleLayout(
+    decision,
+    fallbackPlacement,
+    titleArtTextStyles.title,
+  );
   const mainTitleLines = getDirectedMainTitleLines(
     input.mainTitle,
     layout,
     decision,
     titleArtTextStyles.title.maxCharsPerLine,
+    titleArtTextStyles.title.fontSize,
   );
-  const subtitleLines = input.subtitle
+  const subtitleLines = input.subtitle && decision.subtitlePlacement !== "none"
     ? getDirectedSubtitleLines(
         input.subtitle,
         layout,
         decision,
         titleArtTextStyles.subtitle.maxCharsPerLine,
+        titleArtTextStyles.subtitle.fontSize,
       )
     : [];
   const titleLineHeight = getDirectedTitleLineHeight(
@@ -659,8 +679,10 @@ function buildTitleRenderState(
   );
   const subtitleY = getDirectedSubtitleY(
     layout,
+    decision,
     mainTitleLines.length,
     titleLineHeight,
+    titleArtTextStyles.title.fontSize,
     subtitleOffset,
   );
 
@@ -669,18 +691,22 @@ function buildTitleRenderState(
     mainTitleLines,
     subtitleLines,
     titleLineHeight,
+    subtitleX: getDirectedSubtitleX(layout, decision),
     subtitleY,
+    subtitleTextAnchor: getDirectedSubtitleTextAnchor(layout, decision),
   };
 }
 
 function resolveTitleLayout(
   decision: TitleDirectorDecision,
   fallbackPlacement: TitlePlacementKey,
+  titleStyle: TextStyleWithEffects,
 ): ResolvedTitleLayout {
   const basePlacement = getTitlePlacementConfig(
     decision.placement,
     fallbackPlacement,
   );
+  const titleBox = resolveTitleBox(decision);
   let placement = basePlacement;
   let orientation = getSupportedTitleOrientation(decision.orientation);
   let rotation: number | undefined;
@@ -722,11 +748,27 @@ function resolveTitleLayout(
     rotation = -8;
   }
 
-  if (orientation === "diagonal" && rotation === undefined) {
+  if (titleBox) {
+    placement = {
+      x: getTitleXFromBox(titleBox, decision.titleAlign),
+      y: getTitleYFromBox(titleBox, titleStyle),
+      textAnchor: getTitleAnchorFromAlign(decision.titleAlign),
+      box: titleBox,
+    };
+  }
+
+  if (Number.isFinite(decision.rotationDeg) && decision.rotationDeg !== 0) {
+    rotation = decision.rotationDeg;
+  } else if (orientation === "diagonal") {
     rotation = -8;
   }
 
-  return { placement, orientation, ...(rotation ? { rotation } : {}) };
+  return {
+    placement,
+    orientation,
+    rotationCenter: getRotationCenter(placement),
+    ...(rotation ? { rotation } : {}),
+  };
 }
 
 function getSupportedTitleOrientation(
@@ -743,11 +785,95 @@ function getSupportedTitleOrientation(
   return "horizontal";
 }
 
+function resolveTitleBox(
+  decision: TitleDirectorDecision,
+): ResolvedTitleBox | undefined {
+  const titleBox: unknown = decision.titleBox;
+
+  if (!isRecord(titleBox)) {
+    return undefined;
+  }
+
+  const { x, y, width, height } = titleBox;
+
+  if (
+    !isFiniteNumber(x) ||
+    !isFiniteNumber(y) ||
+    !isFiniteNumber(width) ||
+    !isFiniteNumber(height) ||
+    x < 0 ||
+    y < 0 ||
+    width <= 50 ||
+    height <= 50 ||
+    x + width > 1000 ||
+    y + height > 1000
+  ) {
+    return undefined;
+  }
+
+  return {
+    x: Math.round((x / 1000) * OUTPUT_WIDTH),
+    y: Math.round((y / 1000) * OUTPUT_HEIGHT),
+    width: Math.round((width / 1000) * OUTPUT_WIDTH),
+    height: Math.round((height / 1000) * OUTPUT_HEIGHT),
+  };
+}
+
+function getTitleAnchorFromAlign(
+  titleAlign?: TitleDirectorDecision["titleAlign"],
+): "start" | "middle" | "end" {
+  if (titleAlign === "left") {
+    return "start";
+  }
+
+  if (titleAlign === "right") {
+    return "end";
+  }
+
+  return "middle";
+}
+
+function getTitleXFromBox(
+  box: ResolvedTitleBox,
+  titleAlign?: TitleDirectorDecision["titleAlign"],
+): number {
+  if (titleAlign === "left") {
+    return box.x;
+  }
+
+  if (titleAlign === "right") {
+    return box.x + box.width;
+  }
+
+  return box.x + Math.round(box.width / 2);
+}
+
+function getTitleYFromBox(
+  box: ResolvedTitleBox,
+  titleStyle: TextStyleWithEffects,
+): number {
+  return box.y + titleStyle.fontSize;
+}
+
+function getRotationCenter(
+  placement: TitlePlacementConfig,
+): { x: number; y: number } {
+  if (placement.box) {
+    return {
+      x: placement.box.x + Math.round(placement.box.width / 2),
+      y: placement.box.y + Math.round(placement.box.height / 2),
+    };
+  }
+
+  return { x: placement.x, y: placement.y };
+}
+
 function getDirectedMainTitleLines(
   title: string,
   layout: ResolvedTitleLayout,
   decision: TitleDirectorDecision,
   baseMaxCharsPerLine: number,
+  titleFontSize: number,
 ): string[] {
   if (layout.orientation === "vertical") {
     return Array.from(title);
@@ -763,6 +889,7 @@ function getDirectedMainTitleLines(
       baseMaxCharsPerLine,
       decision.lineBreakMode,
       layout.placement,
+      titleFontSize,
     ),
   );
 }
@@ -772,6 +899,7 @@ function getDirectedSubtitleLines(
   layout: ResolvedTitleLayout,
   decision: TitleDirectorDecision,
   baseMaxCharsPerLine: number,
+  subtitleFontSize: number,
 ): string[] {
   if (layout.orientation === "vertical") {
     return splitTextByLength(subtitle, 12);
@@ -787,6 +915,7 @@ function getDirectedSubtitleLines(
       baseMaxCharsPerLine,
       decision.lineBreakMode,
       layout.placement,
+      subtitleFontSize,
     ),
   );
 }
@@ -808,15 +937,55 @@ function getDirectedTitleLineHeight(
 
 function getDirectedSubtitleY(
   layout: ResolvedTitleLayout,
+  decision: TitleDirectorDecision,
   mainTitleLineCount: number,
   titleLineHeight: number,
+  titleFontSize: number,
   subtitleOffset: number,
 ): number {
+  if (decision.subtitlePlacement === "verticalSide" && layout.placement.box) {
+    return layout.placement.box.y + layout.placement.box.height + 36;
+  }
+
+  if (decision.subtitlePlacement === "side") {
+    return layout.placement.y + titleFontSize + 20;
+  }
+
   if (layout.orientation === "vertical") {
     return layout.placement.y + mainTitleLineCount * titleLineHeight + 42;
   }
 
   return layout.placement.y + mainTitleLineCount * titleLineHeight + subtitleOffset;
+}
+
+function getDirectedSubtitleX(
+  layout: ResolvedTitleLayout,
+  decision: TitleDirectorDecision,
+): number {
+  if (decision.subtitlePlacement === "side" && layout.placement.box) {
+    return layout.placement.x + Math.round(layout.placement.box.width * 0.18);
+  }
+
+  if (decision.subtitlePlacement === "verticalSide" && layout.placement.box) {
+    return layout.placement.box.x + Math.round(layout.placement.box.width / 2);
+  }
+
+  return layout.placement.x;
+}
+
+function getDirectedSubtitleTextAnchor(
+  layout: ResolvedTitleLayout,
+  decision: TitleDirectorDecision,
+): "start" | "middle" | "end" | undefined {
+  if (decision.subtitlePlacement === "side") {
+    return layout.placement.textAnchor;
+  }
+
+  if (decision.subtitlePlacement === "verticalSide") {
+    return "middle";
+  }
+
+  return layout.placement.textAnchor;
 }
 
 function getTitlePlacementConfig(
@@ -859,36 +1028,57 @@ function getSupportedTitlePlacement(
   return fallbackPlacement;
 }
 
+function estimateCharsPerLine(
+  box: ResolvedTitleBox | undefined,
+  fontSize: number,
+): number | undefined {
+  if (!box || fontSize <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(box.width / (fontSize * 0.95));
+}
+
+function clampMaxChars(value: number): number {
+  return Math.min(12, Math.max(2, Math.floor(value)));
+}
+
 function getTitleMaxCharsPerLine(
   baseMaxCharsPerLine: number,
   lineBreakMode: TitleLineBreakMode,
   placement: TitlePlacementConfig,
+  titleFontSize: number,
 ): number {
+  const estimatedChars = estimateCharsPerLine(placement.box, titleFontSize);
+
   if (lineBreakMode === "singleLinePreferred") {
-    return baseMaxCharsPerLine + 2;
+    return clampMaxChars((estimatedChars ?? baseMaxCharsPerLine) + 2);
   }
 
   if (lineBreakMode === "shortLines" || placement.x === 90) {
-    return 6;
+    return clampMaxChars(Math.min(estimatedChars ?? 6, 6));
   }
 
-  return baseMaxCharsPerLine;
+  return clampMaxChars(estimatedChars ?? baseMaxCharsPerLine);
 }
 
 function getSubtitleMaxCharsPerLine(
   baseMaxCharsPerLine: number,
   lineBreakMode: TitleLineBreakMode,
   placement: TitlePlacementConfig,
+  subtitleFontSize: number,
 ): number {
+  const estimatedChars = estimateCharsPerLine(placement.box, subtitleFontSize);
+
   if (lineBreakMode === "singleLinePreferred") {
-    return baseMaxCharsPerLine + 2;
+    return clampMaxChars((estimatedChars ?? baseMaxCharsPerLine) + 2);
   }
 
   if (lineBreakMode === "shortLines" || placement.x === 90) {
-    return 10;
+    return clampMaxChars(Math.min(estimatedChars ?? 10, 10));
   }
 
-  return baseMaxCharsPerLine;
+  return clampMaxChars(estimatedChars ?? baseMaxCharsPerLine);
 }
 
 function getTitleScaleMultiplier(scale?: TitleScaleLevel): number {
@@ -1059,18 +1249,18 @@ function renderDirectedTitleTextLines(params: DirectedTitleTextParams): string {
   const subtitleText = params.state.subtitleLines.length > 0
     ? renderTitleArtTextLines({
         lines: params.state.subtitleLines,
-        x: layout.placement.x,
+        x: params.state.subtitleX,
         y: params.state.subtitleY,
         lineHeight: params.subtitleStyle.lineHeight,
         className: "subtitle",
         letterSpacing: params.subtitleStyle.letterSpacing,
-        textAnchor: layout.placement.textAnchor,
+        textAnchor: params.state.subtitleTextAnchor,
       })
     : "";
   const content = [titleText, subtitleText].filter(Boolean).join("\n  ");
 
-  if (layout.orientation === "diagonal") {
-    return `<g transform="rotate(${layout.rotation ?? -8} ${layout.placement.x} ${layout.placement.y})">\n  ${content}\n  </g>`;
+  if (layout.rotation) {
+    return `<g transform="rotate(${layout.rotation} ${layout.rotationCenter.x} ${layout.rotationCenter.y})">\n  ${content}\n  </g>`;
   }
 
   return content;
@@ -1128,6 +1318,14 @@ function withOpacity(color: string, opacity: number): string {
   }
 
   return `rgba(${rgb.red}, ${rgb.green}, ${rgb.blue}, ${opacity})`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function parseHexColor(
