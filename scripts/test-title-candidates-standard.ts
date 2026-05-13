@@ -25,6 +25,9 @@ async function main(): Promise<void> {
     avoidNotes: "不要山水卷轴、不要低幼卡通、不要人物太多。",
   });
 
+  console.error("TITLE_CANDIDATES_SOURCE", result.source);
+  console.error("TITLE_CANDIDATES_REASON", result.reason);
+  console.error("TITLE_CANDIDATES_COUNT", result.candidates.length);
   console.log(JSON.stringify(result, null, 2));
 }
 

@@ -104,6 +104,12 @@ type PatternSummary = {
   templateRiskWarning: string;
 };
 
+type CandidateValidationDiagnostic = {
+  valid: boolean;
+  reason?: string;
+  rawPreview?: string;
+};
+
 const UNIT_ROLES: readonly TitleCandidateUnitRole[] = ["lead", "main", "accent", "support"];
 const UNIT_DIRECTIONS: readonly TitleCandidateUnitDirection[] = ["horizontal", "vertical"];
 const SUBTITLE_PLACEMENTS: readonly TitleCandidateSubtitle["placement"][] = ["below", "side", "verticalSide", "none"];
@@ -137,18 +143,24 @@ export async function generateTitleCandidates(
       response_format: { type: "json_object" },
       temperature: 0.65,
     });
-    const candidates = parseCandidates(
+    const parsed = parseCandidatesWithDiagnostic(
       response.choices[0]?.message?.content,
       input.mainTitle,
     );
 
-    if (!candidates) {
-      return fallback(input, "AI title candidate output invalid; used fallback candidates.");
+    if (!parsed.candidates) {
+      return fallback(
+        input,
+        `AI title candidate output invalid: ${formatDiagnostic(parsed.diagnostic)}; used fallback candidates.`,
+      );
     }
 
-    return { source: "ai", candidates, reason: "AI generated 6-12 validated reference-driven title candidates." };
-  } catch {
-    return fallback(input, "AI title candidate generation failed; used fallback candidates.");
+    return { source: "ai", candidates: parsed.candidates, reason: "AI generated 6-12 validated reference-driven title candidates." };
+  } catch (error) {
+    return fallback(
+      input,
+      `AI title candidate generation failed: ${errorMessage(error)}; used fallback candidates.`,
+    );
   }
 }
 
@@ -157,13 +169,21 @@ function buildSystemPrompt(): string {
     "你是远方智设的标题候选生成器。",
     "你不是排版员，不是模板选择器，不能生成图片。",
     "你不能改写中文标题；不能增字、漏字、改字。",
-    "你必须基于 reference patterns 生成 6-12 个标题候选。",
+    "你必须基于 reference patterns 生成 exactly 6 个候选，不多不少。",
     "reference patterns 是参考语法，不是固定模板，不能做固定 12 选 1。",
     "每个 candidate 可以基于 1-3 个 reference pattern 组合、变形和生成。",
     "每个 candidate 必须包含字组级 titleUnits。",
     "每个 candidate 的 titleUnits.text 按顺序拼接后必须等于 mainTitle。",
     "不要只横排一整行、竖排一整列、整句斜着放。",
     "候选之间必须有明显结构差异。",
+    "effectIntent 只能是以下字符串之一，不能写解释：stageDepth / cleanReadable / chineseSeal / campaignImpact / editorialSoft / playfulBadge。",
+    "decorationIntents 必须是数组，数组元素只能是以下字符串，不能写解释：none / stageLight / smallStars / medalLine / goldLine / sealStamp / paperTag / bookMark / campaignLabel / growthArrow / colorBlock / badge / playfulDot。",
+    "titleUnits.role 只能是：lead / main / accent / support。不能使用 badge / hero / title / primary / secondary 等其他词。",
+    "titleUnits.direction 只能是：horizontal / vertical。",
+    "如果你想表达“徽章感”，不要把 role 写成 badge，而是在 decorationIntents 中使用 badge，或者在 hybridStrategy / whyNotTemplate 里解释。",
+    "不要把中文词语切断成无意义字组。拆分必须符合语义词组。",
+    "hybridStrategy、readabilityPlan、backgroundFitReason、whyNotTemplate 每项控制在 40 个中文字符以内，不要长段解释。",
+    "candidate 内部不要输出 reason 字段。",
     "必须只输出 JSON，不要 Markdown，不要解释。",
   ].join("\n");
 }
@@ -183,11 +203,58 @@ function buildUserPrompt(input: GenerateTitleCandidatesInput): string {
     "可用 reference patterns 摘要：",
     JSON.stringify(getReferencePatternSummaries(), null, 2),
     "输出 JSON 格式：{ \"candidates\": [TitleCandidate...] }。",
+    "candidates 数组长度必须正好是 6。",
     "每个 candidate 必须包含 candidateId、patternKeys、hybridStrategy、titleUnits、effectIntent、decorationIntents、readabilityPlan、backgroundFitReason、whyNotTemplate。",
     "titleUnits 每项包含 text、role、direction、x、y、scale、rotationDeg。",
     "x / y 使用 0-1000 局部归一化坐标；scale 0.7-1.8；rotationDeg -15 到 15。",
     "backgroundFitReason 必须说明它为什么适合当前背景。",
     "whyNotTemplate 必须说明它如何避免固定模板套用。",
+    "如果 mainTitle 是“成长汇报课”，优先考虑：成长 / 汇报课、成长 / 汇报 / 课、成长汇报课。",
+    "禁止无意义拆分，例如：成长汇 / 报课。",
+    "严格字段示例：",
+    JSON.stringify({
+      candidateId: "c1",
+      patternKeys: ["stageSplitHero"],
+      hybridStrategy: "基于 stageSplitHero，将标题拆成前导词和主视觉词。",
+      titleUnits: [
+        {
+          text: "成长",
+          role: "lead",
+          direction: "horizontal",
+          x: 350,
+          y: 450,
+          scale: 1.2,
+          rotationDeg: 0,
+        },
+        {
+          text: "汇报课",
+          role: "main",
+          direction: "horizontal",
+          x: 560,
+          y: 450,
+          scale: 1.55,
+          rotationDeg: 0,
+        },
+      ],
+      subtitle: {
+        text: "看见孩子的表达力量",
+        x: 450,
+        y: 620,
+        scale: 0.75,
+        placement: "below",
+      },
+      effectIntent: "stageDepth",
+      decorationIntents: ["stageLight", "smallStars"],
+      readabilityPlan: "深蓝实心字加轻描边，保证聚光区域可读。",
+      backgroundFitReason: "中部聚光区较干净，适合主标题成为视觉中心。",
+      whyNotTemplate: "字组拆分和大小根据标题语义生成，不是固定模板。",
+    }, null, 2),
+    "禁止输出：\"effectIntent\": \"突出汇报课作为视觉重心\"",
+    "禁止输出：\"decorationIntents\": \"利用字组大小制造层次\"",
+    "禁止输出：\"role\": \"badge\"",
+    "正确写法：\"effectIntent\": \"stageDepth\"",
+    "正确写法：\"decorationIntents\": [\"stageLight\", \"smallStars\"]",
+    "正确写法：\"role\": \"accent\"",
   ].join("\n");
 }
 
@@ -214,14 +281,34 @@ function parseCandidates(
   content: string | null | undefined,
   mainTitle: string,
 ): TitleCandidate[] | undefined {
+  return parseCandidatesWithDiagnostic(content, mainTitle).candidates;
+}
+
+function parseCandidatesWithDiagnostic(
+  content: string | null | undefined,
+  mainTitle: string,
+): {
+  candidates?: TitleCandidate[];
+  diagnostic: CandidateValidationDiagnostic;
+} {
   if (!content) {
-    return undefined;
+    return { diagnostic: { valid: false, reason: "empty model content" } };
   }
 
   try {
-    return validateCandidates(JSON.parse(stripJsonFence(content)), mainTitle);
-  } catch {
-    return undefined;
+    return validateCandidatesWithDiagnostic(
+      JSON.parse(stripJsonFence(content)),
+      mainTitle,
+      rawPreview(content),
+    );
+  } catch (error) {
+    return {
+      diagnostic: {
+        valid: false,
+        reason: `JSON parse failed: ${errorMessage(error)}`,
+        rawPreview: rawPreview(content),
+      },
+    };
   }
 }
 
@@ -229,19 +316,71 @@ export function validateCandidates(
   value: unknown,
   mainTitle: string,
 ): TitleCandidate[] | undefined {
-  if (!isRecord(value) || !Array.isArray(value.candidates)) {
-    return undefined;
+  return validateCandidatesWithDiagnostic(value, mainTitle).candidates;
+}
+
+function validateCandidatesWithDiagnostic(
+  value: unknown,
+  mainTitle: string,
+  preview?: string,
+): {
+  candidates?: TitleCandidate[];
+  diagnostic: CandidateValidationDiagnostic;
+} {
+  if (!isRecord(value)) {
+    return failure("root is not object", preview);
   }
 
-  if (value.candidates.length < 6 || value.candidates.length > 12) {
-    return undefined;
+  if (!Array.isArray(value.candidates)) {
+    return failure("candidates missing or not array", preview);
   }
 
-  const candidates = value.candidates
-    .map((candidate, index) => normalizeCandidate(candidate, mainTitle, index))
+  if (value.candidates.length < 6) {
+    return failure(`candidates count < 6: ${value.candidates.length}`, preview);
+  }
+
+  if (value.candidates.length > 12) {
+    return failure(`candidates count > 12: ${value.candidates.length}`, preview);
+  }
+
+  const normalized = value.candidates.map((candidate, index) => normalizeCandidateWithReason(candidate, mainTitle, index));
+  const candidates = normalized
+    .map((result) => result.candidate)
     .filter((candidate): candidate is TitleCandidate => Boolean(candidate));
 
-  return candidates.length >= 6 ? candidates.slice(0, 12) : undefined;
+  if (candidates.length < 6) {
+    const invalidReasons = normalized
+      .filter((result) => !result.candidate)
+      .map((result) => result.reason)
+      .filter(isNonEmptyString)
+      .slice(0, 6)
+      .join("; ");
+
+    return failure(
+      `valid candidates after filtering < 6: ${candidates.length}; ${invalidReasons}`,
+      preview,
+    );
+  }
+
+  return {
+    candidates: candidates.slice(0, 12),
+    diagnostic: { valid: true },
+  };
+}
+
+function failure(
+  reason: string,
+  preview?: string,
+): {
+  diagnostic: CandidateValidationDiagnostic;
+} {
+  return {
+    diagnostic: {
+      valid: false,
+      reason,
+      ...(preview ? { rawPreview: preview } : {}),
+    },
+  };
 }
 
 function normalizeCandidate(
@@ -249,8 +388,21 @@ function normalizeCandidate(
   mainTitle: string,
   index: number,
 ): TitleCandidate | undefined {
+  return normalizeCandidateWithReason(value, mainTitle, index).candidate;
+}
+
+function normalizeCandidateWithReason(
+  value: unknown,
+  mainTitle: string,
+  index: number,
+): {
+  candidate?: TitleCandidate;
+  reason?: string;
+} {
+  const label = `candidate ${index + 1}`;
+
   if (!isRecord(value)) {
-    return undefined;
+    return { reason: `${label} filtered because root is not object` };
   }
 
   const patternKeys = normalizePatternKeys(value.patternKeys);
@@ -259,38 +411,61 @@ function normalizeCandidate(
     ? value.candidateId.trim()
     : `c${index + 1}`;
 
+  if (!patternKeys) {
+    return { reason: `${label} filtered because patternKeys invalid` };
+  }
+
+  if (!titleUnits) {
+    return { reason: `${label} filtered because titleUnits invalid` };
+  }
+
+  const joinedTitle = titleUnits.map((unit) => unit.text).join("");
+
+  if (joinedTitle !== mainTitle) {
+    return {
+      reason: `${label} filtered because titleUnits joined text !== mainTitle: "${joinedTitle}" !== "${mainTitle}"`,
+    };
+  }
+
+  if (!isOneOf(value.effectIntent, EFFECT_INTENTS)) {
+    return { reason: `${label} filtered because effectIntent invalid` };
+  }
+
   if (
-    !patternKeys ||
-    !titleUnits ||
-    titleUnits.map((unit) => unit.text).join("") !== mainTitle ||
-    !isNonEmptyString(value.hybridStrategy) ||
-    !isOneOf(value.effectIntent, EFFECT_INTENTS) ||
     !Array.isArray(value.decorationIntents) ||
-    !value.decorationIntents.every((item) => isOneOf(item, DECORATION_INTENTS)) ||
+    !value.decorationIntents.every((item) => isOneOf(item, DECORATION_INTENTS))
+  ) {
+    return { reason: `${label} filtered because decorationIntents invalid` };
+  }
+
+  if (
+    !isNonEmptyString(value.hybridStrategy) ||
     !isNonEmptyString(value.readabilityPlan) ||
     !isNonEmptyString(value.backgroundFitReason) ||
     !isNonEmptyString(value.whyNotTemplate)
   ) {
-    return undefined;
+    return { reason: `${label} filtered because required text fields missing` };
   }
 
   const subtitle = normalizeSubtitle(value.subtitle);
 
   if (value.subtitle !== undefined && !subtitle) {
-    return undefined;
+    return { reason: `${label} filtered because subtitle invalid` };
   }
 
   return {
-    candidateId,
-    patternKeys,
-    hybridStrategy: value.hybridStrategy.trim(),
-    titleUnits,
-    ...(subtitle ? { subtitle } : {}),
-    effectIntent: value.effectIntent,
-    decorationIntents: value.decorationIntents,
-    readabilityPlan: value.readabilityPlan.trim(),
-    backgroundFitReason: value.backgroundFitReason.trim(),
-    whyNotTemplate: value.whyNotTemplate.trim(),
+    candidate: {
+      candidateId,
+      patternKeys,
+      hybridStrategy: value.hybridStrategy.trim(),
+      titleUnits,
+      ...(subtitle ? { subtitle } : {}),
+      effectIntent: value.effectIntent,
+      decorationIntents: value.decorationIntents,
+      readabilityPlan: value.readabilityPlan.trim(),
+      backgroundFitReason: value.backgroundFitReason.trim(),
+      whyNotTemplate: value.whyNotTemplate.trim(),
+    },
   };
 }
 
@@ -506,6 +681,31 @@ function buildImageUrl(base64: string): string {
 
 function stripJsonFence(content: string): string {
   return content.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "");
+}
+
+function formatDiagnostic(diagnostic: CandidateValidationDiagnostic): string {
+  const reason = diagnostic.reason || "unknown validation failure";
+  return diagnostic.rawPreview
+    ? `${reason}; rawPreview: ${diagnostic.rawPreview}`
+    : reason;
+}
+
+function rawPreview(content: string): string {
+  return sanitizeDiagnosticText(content, 2000);
+}
+
+function errorMessage(error: unknown): string {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  return sanitizeDiagnosticText(rawMessage, 500);
+}
+
+function sanitizeDiagnosticText(value: string, maxLength: number): string {
+  const apiKey = process.env.OPENAI_API_KEY;
+  const withoutApiKey = apiKey ? value.replaceAll(apiKey, "[redacted]") : value;
+  const withoutDataImage = withoutApiKey.replace(/data:image\/[a-zA-Z+.-]+;base64,[A-Za-z0-9+/=]+/g, "[redacted-image]");
+  const withoutLongToken = withoutDataImage.replace(/[A-Za-z0-9+/]{200,}={0,2}/g, "[redacted-long-token]");
+
+  return withoutLongToken.slice(0, maxLength);
 }
 
 function isNonEmptyString(value: unknown): value is string {
