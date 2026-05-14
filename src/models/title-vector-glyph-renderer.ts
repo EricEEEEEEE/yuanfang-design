@@ -88,6 +88,10 @@ export type VectorGlyphRun = {
   text: string;
   role: VectorTitleRole;
   font: TitleFontResolveResult;
+  fontSize: number;
+  fill: string;
+  strokeWidth: number;
+  transform: string;
   plannedBox: TitleUnitBox;
   measuredBox?: TitleBox;
   visualWeight: number;
@@ -111,6 +115,7 @@ export type VectorGlyphMeasuredBoxes = {
 
 export type VectorGlyphSafetyCheck = {
   checkId: string;
+  code: string;
   passed: boolean;
   severity: "error" | "warning";
   target?: string;
@@ -126,7 +131,7 @@ export type VectorGlyphRenderInput = {
   source: VectorGlyphRenderSource;
   blueprint: TitleLockupBlueprint;
   canvas: { width: number; height: number };
-  titleStylePreset?: StandardTitleArtStyleKey | "auto";
+  titleStylePreset?: TitleFontPresetKey | "auto";
   brandStyle?: "yuanfangDefault";
   fontRegistry?: TitleFontRegistry;
   fontFallback?: TitleFontFallbackPolicy;
