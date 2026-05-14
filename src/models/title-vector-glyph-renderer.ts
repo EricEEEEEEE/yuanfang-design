@@ -6,6 +6,7 @@ import type {
   TitleLockupUnit,
   TitleUnitBox,
 } from "@/config/title-lockup-blueprint";
+import type { RasterMeasurementResult } from "@/models/title-raster-measurement";
 import type { ForbiddenZone } from "@/services/background-layout-intelligence.service";
 
 export type { StandardFontKey, StandardTitleArtStyleKey };
@@ -163,6 +164,7 @@ export type VectorGlyphRenderInput = {
   fontEmbedMode?: VectorGlyphFontEmbedMode;
   sizeBudget?: Partial<VectorGlyphSizeBudget>;
   measurementRequirement?: VectorGlyphMeasurementRequirement;
+  rasterMeasurementResult?: RasterMeasurementResult;
 };
 
 export type VectorGlyphRenderResult = {
