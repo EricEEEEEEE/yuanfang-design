@@ -88,7 +88,7 @@ function blueprintUsesVerticalOrganization(blueprint: TitleLockupBlueprint): boo
 
   const ySpan = getBlueprintUnitYSpan(blueprint);
   const aspect = getBlueprintLockupBoxAspect(blueprint);
-  const spanThreshold = Math.max(60, Math.min(120, blueprint.lockupBox.height * 0.22));
+  const spanThreshold = Math.max(40, Math.min(120, blueprint.lockupBox.height * 0.22));
 
   if (
     blueprint.orientationPreference === "verticalFirst" &&

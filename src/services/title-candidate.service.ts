@@ -1214,7 +1214,13 @@ function normalizeLockupBlueprintWithReason(
     return { reason: `${label} filtered because spatialContract invalid` };
   }
 
-  const subtitleLockup = normalizeSubtitleLockup(value.subtitleLockup, inputSubtitleText(value), lockupBox, anchor);
+  const subtitleLockup = normalizeSubtitleLockup(
+    value.subtitleLockup,
+    inputSubtitleText(value),
+    lockupBox,
+    anchor,
+    titleUnits,
+  );
 
   if (!subtitleLockup) {
     return { reason: `${label} filtered because subtitleLockup invalid` };
@@ -1509,6 +1515,7 @@ function normalizeSubtitleLockup(
   _subtitleText: string,
   lockupBox: TitleLockupBox,
   anchor: TextAnchor,
+  titleUnits: readonly TitleLockupUnit[],
 ): TitleLockupBlueprint["subtitleLockup"] | undefined {
   if (!isRecord(value) || typeof value.text !== "string") {
     return undefined;
@@ -1542,6 +1549,10 @@ function normalizeSubtitleLockup(
   const subtitleBox = normalizeUnitBox(value.subtitleBox);
 
   if (!subtitleBox) {
+    return undefined;
+  }
+
+  if (!isSubtitleBoxSafe(subtitleBox, titleUnits, value.placementPolicy)) {
     return undefined;
   }
 
@@ -1720,6 +1731,35 @@ function isUnitBoxInsideAnchor(unitBox: TitleUnitBox, anchor: TextAnchor): boole
   );
 }
 
+function isSubtitleBoxSafe(
+  subtitleBox: TitleUnitBox,
+  titleUnits: readonly TitleLockupUnit[],
+  placementPolicy: TitleSubtitlePlacementPolicy,
+): boolean {
+  if (titleUnits.some((unit) => boxOverlapRatio(subtitleBox, unit.unitBox) > 0.01)) {
+    return false;
+  }
+
+  const minTitleX = Math.min(...titleUnits.map((unit) => unit.unitBox.x));
+  const maxTitleX = Math.max(...titleUnits.map((unit) => unit.unitBox.x + unit.unitBox.width));
+  const maxTitleBottom = Math.max(...titleUnits.map((unit) => unit.unitBox.y + unit.unitBox.height));
+  const isBesideTitle = subtitleBox.x + subtitleBox.width <= minTitleX - 8 || subtitleBox.x >= maxTitleX + 8;
+
+  return placementPolicy === "sideOfMainLockup"
+    ? isBesideTitle || subtitleBox.y >= maxTitleBottom + 8
+    : subtitleBox.y >= maxTitleBottom + 8;
+}
+
+function boxOverlapRatio(
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number },
+): number {
+  const width = Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x));
+  const height = Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y));
+
+  return width * height / Math.max(1, Math.min(left.width * left.height, right.width * right.height));
+}
+
 function titleBoxesMatch(
   box: TitleLockupBlueprint["spatialContract"]["anchorBox"],
   anchor: TextAnchor,
@@ -1805,7 +1845,7 @@ function blueprintUsesVerticalOrganization(blueprint: TitleLockupBlueprint): boo
 
   const ySpan = getBlueprintUnitYSpan(blueprint);
   const aspect = getBlueprintLockupBoxAspect(blueprint);
-  const spanThreshold = Math.max(60, Math.min(120, blueprint.lockupBox.height * 0.22));
+  const spanThreshold = Math.max(40, Math.min(120, blueprint.lockupBox.height * 0.22));
 
   if (
     blueprint.orientationPreference === "verticalFirst" &&
@@ -2332,7 +2372,21 @@ function fallback(
     candidatePlan,
     true,
   );
-  const lockupBlueprints = parsedBlueprints.lockupBlueprints ?? [];
+  const fallbackResult = parsedBlueprints.lockupBlueprints && parsedBlueprints.lockupBlueprints.length >= 6
+    ? {
+        lockupBlueprints: parsedBlueprints.lockupBlueprints,
+        reason,
+      }
+    : {
+        lockupBlueprints: buildSafeFallbackLockupBlueprints(
+          input,
+          fallbackDrafts,
+          spatialStrategy,
+          candidatePlan,
+        ),
+        reason: `${reason} Fallback validation diagnostic: ${formatDiagnostic(parsedBlueprints.diagnostic)}; returned system-built diagnostic fallback.`,
+      };
+  const lockupBlueprints = fallbackResult.lockupBlueprints;
   const candidates = buildLegacyCandidatesFromBlueprints(lockupBlueprints, spatialStrategy);
 
   return {
@@ -2343,9 +2397,28 @@ function fallback(
     firstDraftUnitLayoutHints: fallbackDrafts[0]?.unitLayoutHints ?? [],
     lockupBlueprints,
     candidates,
-    reason,
+    reason: fallbackResult.reason,
     spatialStrategy,
   };
+}
+
+function buildSafeFallbackLockupBlueprints(
+  input: GenerateTitleCandidatesInput,
+  fallbackDrafts: readonly LockupDraft[],
+  spatialStrategy: SpatialStrategy,
+  candidatePlan: readonly LockupBlueprintCandidatePlanItem[],
+): TitleLockupBlueprint[] {
+  return fallbackDrafts
+    .map((draft, index) => {
+      const planItem = getCandidatePlanItemById(candidatePlan, draft.candidateId)
+        ?? candidatePlan[index];
+
+      return planItem
+        ? buildBlueprintFromDraftAndPlan(input, draft, spatialStrategy, planItem, index, true)
+        : undefined;
+    })
+    .filter((blueprint): blueprint is TitleLockupBlueprint => Boolean(blueprint))
+    .slice(0, 6);
 }
 
 function getLockupDraftFields(lockupDrafts: readonly LockupDraft[]): string[] {
@@ -2448,7 +2521,14 @@ function buildBlueprintFromDraftAndPlan(
   );
   const collisionPolicy = createCollisionPolicy();
   const forbiddenZonePolicy = createForbiddenZonePolicy(spatialStrategy);
-  const subtitleLockup = buildSubtitleLockup(input.subtitle, lockupBox, anchor, grammar.subtitlePlacementPolicy);
+  const subtitleLockup = buildSubtitleLockup(
+    input.subtitle,
+    lockupBox,
+    anchor,
+    grammar.subtitlePlacementPolicy,
+    titleUnits,
+    spatialStrategy,
+  );
   const spatialContract = {
     spatialAnchorId: anchor.id,
     anchorBox: {
@@ -2531,7 +2611,14 @@ function createLockupBlueprint(params: {
   const collisionPolicy = createCollisionPolicy();
   const forbiddenZonePolicy = createForbiddenZonePolicy(params.spatialStrategy);
   const titleUnits = buildLockupUnits(params.semanticSplit, lockupBox, grammar.flowAxis, params.candidateIndex);
-  const subtitleLockup = buildSubtitleLockup(params.input.subtitle, lockupBox, params.anchor, grammar.subtitlePlacementPolicy);
+  const subtitleLockup = buildSubtitleLockup(
+    params.input.subtitle,
+    lockupBox,
+    params.anchor,
+    grammar.subtitlePlacementPolicy,
+    titleUnits,
+    params.spatialStrategy,
+  );
   const spatialContract = {
     spatialAnchorId: params.anchor.id,
     anchorBox: {
@@ -3025,26 +3112,75 @@ function buildSubtitleLockup(
   lockupBox: TitleLockupBox,
   anchor: TextAnchor,
   placementPolicy: TitleSubtitlePlacementPolicy,
+  titleUnits: readonly TitleLockupUnit[],
+  spatialStrategy: SpatialStrategy,
 ): TitleLockupBlueprint["subtitleLockup"] {
   if (!subtitle) {
-    return {
-      text: "",
-      placementPolicy: "hidden",
-      subtitleBox: null,
-      visualWeight: 0,
-      readingOrder: 99,
-    };
+    return hiddenSubtitleLockup();
   }
 
-  const subtitleBox = createSubtitleBox(lockupBox, anchor, placementPolicy);
+  const subtitlePlacement = resolveSafeSubtitlePlacement(
+    lockupBox,
+    anchor,
+    placementPolicy,
+    titleUnits,
+    spatialStrategy,
+  );
+
+  if (!subtitlePlacement) {
+    return hiddenSubtitleLockup(subtitle);
+  }
 
   return {
     text: subtitle,
-    placementPolicy,
-    subtitleBox,
+    placementPolicy: subtitlePlacement.placementPolicy,
+    subtitleBox: subtitlePlacement.subtitleBox,
     visualWeight: 1.4,
     readingOrder: 99,
   };
+}
+
+function hiddenSubtitleLockup(text = ""): TitleLockupBlueprint["subtitleLockup"] {
+  return {
+    text,
+    placementPolicy: "hidden",
+    subtitleBox: null,
+    visualWeight: 0,
+    readingOrder: 99,
+  };
+}
+
+function resolveSafeSubtitlePlacement(
+  lockupBox: TitleLockupBox,
+  anchor: TextAnchor,
+  placementPolicy: TitleSubtitlePlacementPolicy,
+  titleUnits: readonly TitleLockupUnit[],
+  spatialStrategy: SpatialStrategy,
+): {
+  placementPolicy: TitleSubtitlePlacementPolicy;
+  subtitleBox: TitleUnitBox;
+} | undefined {
+  if (placementPolicy !== "secondaryAnchor") {
+    const preferredBox = createSubtitleBox(lockupBox, anchor, placementPolicy);
+
+    if (isSubtitleBoxSafe(preferredBox, titleUnits, placementPolicy)) {
+      return { placementPolicy, subtitleBox: preferredBox };
+    }
+  }
+
+  for (const anchorId of spatialStrategy.secondaryTextAnchorIds) {
+    const secondaryAnchor = getTextAnchorById(spatialStrategy, anchorId);
+
+    if (!secondaryAnchor) continue;
+
+    const secondaryBox = createSecondaryAnchorSubtitleBox(secondaryAnchor);
+
+    if (isSubtitleBoxSafe(secondaryBox, titleUnits, "secondaryAnchor")) {
+      return { placementPolicy: "secondaryAnchor", subtitleBox: secondaryBox };
+    }
+  }
+
+  return undefined;
 }
 
 function createSubtitleBox(
@@ -3067,12 +3203,28 @@ function createSubtitleBox(
     };
   }
 
-  const width = Math.round(lockupBox.width * 0.72);
-  const height = Math.round(lockupBox.height * 0.13);
+  const width = Math.round(Math.max(24, Math.min(lockupBox.width * 0.72, anchor.width * 0.86, anchor.width - 2)));
+  const height = Math.round(Math.max(20, Math.min(44, Math.max(28, anchor.height * 0.12), anchor.height - 2)));
+  const belowY = Math.round(lockupBox.y + lockupBox.height + 12);
 
   return {
     x: Math.round(clamp(lockupBox.x + (lockupBox.width - width) / 2, anchor.x, anchor.x + anchor.width - width)),
-    y: Math.round(clamp(lockupBox.y + lockupBox.height - height - lockupBox.safePadding, anchor.y, anchor.y + anchor.height - height)),
+    y: Math.round(clamp(belowY, anchor.y, anchor.y + anchor.height - height)),
+    width,
+    height,
+    maxWidth: width,
+    maxHeight: height,
+    rotationDeg: 0,
+  };
+}
+
+function createSecondaryAnchorSubtitleBox(anchor: TextAnchor): TitleUnitBox {
+  const width = Math.round(Math.max(24, Math.min(anchor.width * 0.76, anchor.width - 2)));
+  const height = Math.round(Math.max(20, Math.min(44, anchor.height * 0.28, anchor.height - 2)));
+
+  return {
+    x: Math.round(clamp(anchor.x + (anchor.width - width) / 2, anchor.x, anchor.x + anchor.width - width)),
+    y: Math.round(clamp(anchor.y + (anchor.height - height) / 2, anchor.y, anchor.y + anchor.height - height)),
     width,
     height,
     maxWidth: width,

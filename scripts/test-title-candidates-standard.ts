@@ -29,6 +29,9 @@ async function main(): Promise<void> {
   console.error("TITLE_CANDIDATES_SOURCE", result.source);
   console.error("TITLE_CANDIDATES_REASON", result.reason);
   console.error("TITLE_CANDIDATES_COUNT", result.candidates.length);
+  if (result.source === "fallback" && result.candidates.length === 0) {
+    console.error("TITLE_CANDIDATES_COUNT 0 FAIL", result.reason);
+  }
   console.error("STRUCTURED_OUTPUT_MODE", result.structuredOutputMode);
   console.error("LOCKUP_DRAFT_COUNT", result.lockupDraftCount);
   console.error("LOCKUP_DRAFT_FIELDS", result.lockupDraftFields.join(","));
@@ -37,6 +40,9 @@ async function main(): Promise<void> {
     JSON.stringify(result.firstDraftUnitLayoutHints),
   );
   console.error("TITLE_LOCKUP_BLUEPRINT_COUNT", result.lockupBlueprints.length);
+  if (result.source === "fallback" && result.lockupBlueprints.length === 0) {
+    console.error("TITLE_LOCKUP_BLUEPRINT_COUNT 0 FAIL", result.reason);
+  }
   console.error(
     "TITLE_LOCKUP_BLUEPRINTS",
     result.lockupBlueprints
@@ -135,7 +141,7 @@ function blueprintUsesVerticalOrganization(blueprint: TitleLockupBlueprint): boo
 
   const ySpan = getBlueprintUnitYSpan(blueprint);
   const aspect = getBlueprintLockupBoxAspect(blueprint);
-  const spanThreshold = Math.max(60, Math.min(120, blueprint.lockupBox.height * 0.22));
+  const spanThreshold = Math.max(40, Math.min(120, blueprint.lockupBox.height * 0.22));
 
   if (
     blueprint.orientationPreference === "verticalFirst" &&
