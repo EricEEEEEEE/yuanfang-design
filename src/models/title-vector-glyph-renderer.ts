@@ -94,6 +94,8 @@ export type VectorGlyphRun = {
   transform: string;
   plannedBox: TitleUnitBox;
   measuredBox?: TitleBox;
+  fontEmbedded?: boolean;
+  estimated?: boolean;
   visualWeight: number;
   allowEmphasis: boolean;
   rotationDeg: number;
