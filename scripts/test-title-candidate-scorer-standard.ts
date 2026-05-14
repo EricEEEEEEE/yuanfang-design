@@ -71,6 +71,35 @@ async function main(): Promise<void> {
   );
   console.error("SCORER_TOP_ELIGIBLE", finalRanking[0]?.candidateId ?? "null");
   console.error(
+    "SCORER_DIVERSITY_GROUPS",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.diagnostic.diversityGroupKey}`)
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_REFINER_SELECTION",
+    scoringResult.results
+      .map((result) => [
+        result.candidateId,
+        result.shouldEnterRefiner ? "refiner" : "hold",
+        result.diagnostic.refinerSelectionReason,
+      ].join(":"))
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_STRUCTURAL_SIMILARITY",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.diagnostic.nearestSimilarCandidateId ?? "none"}:${result.diagnostic.maxStructuralSimilarity}`)
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_ARRANGEMENT_SIGNATURES",
+    JSON.stringify(scoringResult.results.map((result) => ({
+      candidateId: result.candidateId,
+      signature: result.diagnostic.arrangementSignature,
+    }))),
+  );
+  console.error(
     "SCORER_BREAKDOWN",
     JSON.stringify(scoringResult.results.map((result) => ({
       candidateId: result.candidateId,
@@ -78,6 +107,7 @@ async function main(): Promise<void> {
       score: result.score,
       shouldEnterRefiner: result.shouldEnterRefiner,
       shouldReject: result.shouldReject,
+      diagnostic: result.diagnostic,
     }))),
   );
   console.log(JSON.stringify({

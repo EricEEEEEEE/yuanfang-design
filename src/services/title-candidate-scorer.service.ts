@@ -10,22 +10,57 @@ export type TitleCandidateScoreBreakdown = {
 };
 export type TitleCandidateScoringResult = {
   candidateId: string; rank: number; score: TitleCandidateScoreBreakdown; shouldEnterRefiner: boolean; shouldReject: boolean;
+  diagnostic: TitleCandidateScoringDiagnostic;
 };
 export type ScoreTitleCandidatesResult = {
   source: "rule-based-v1"; results: TitleCandidateScoringResult[]; bestCandidateId: string | null; needsRefinement: boolean; reason: string;
 };
+export type TitleCandidateScoringDiagnostic = {
+  arrangementSignature: ArrangementSignature;
+  diversityGroupKey: string;
+  nearestSimilarCandidateId: string | null;
+  maxStructuralSimilarity: number;
+  refinerSelectionReason: string;
+};
 
 type ScoreParts = Omit<TitleCandidateScoreBreakdown, "totalScore" | "reasons" | "warnings">;
+type YSpanBucket = "flat" | "compact" | "medium" | "tall";
+type XOffsetPattern = "centered" | "leftRightStagger" | "rightLeftStagger" | "diagonalDown" | "diagonalUp" | "single" | "unknown";
+type HeroPosition = "top" | "middle" | "bottom" | "single" | "unknown";
+type StructuralFamily = "fullHeroSingle" | "leadHeroDoubleHorizontal" | "threeStepVerticalStagger" | "verticalHeroStack" | "centerStageDouble" | "badgeHeroDouble" | "other";
+type ArrangementSignature = {
+  semanticSplitId: string;
+  compositionMode: string;
+  flowAxis: string;
+  unitCount: number;
+  ySpanBucket: YSpanBucket;
+  xOffsetPattern: XOffsetPattern;
+  heroPosition: HeroPosition;
+  subtitlePlacement: string;
+  subtitleVisibility: "visible" | "hidden";
+  patternKeyGroup: string;
+  structuralFamily: StructuralFamily;
+};
+type SimilarityMatch = { candidateId: string | null; score: number };
+type RefinerSelection = { selectedIds: Set<string>; reasons: Map<string, string> };
 
 export function scoreTitleCandidates(input: ScoreTitleCandidatesInput): ScoreTitleCandidatesResult {
-  const results = input.lockupBlueprints
+  const rankedResults = input.lockupBlueprints
     .map((blueprint) => scoreBlueprint(blueprint, input.lockupBlueprints, input.spatialStrategy))
     .sort(compareScoringResults)
     .map((result, index) => ({
       ...result,
       rank: index + 1,
-      shouldEnterRefiner: !result.shouldReject && index < 3 && result.score.totalScore >= 60,
     }));
+  const selection = selectRefinerCandidates(rankedResults);
+  const results = rankedResults.map((result) => ({
+    ...result,
+    shouldEnterRefiner: selection.selectedIds.has(result.candidateId),
+    diagnostic: {
+      ...result.diagnostic,
+      refinerSelectionReason: selection.reasons.get(result.candidateId) ?? "held: not selected for refiner calibration.",
+    },
+  }));
   const best = results.find((result) => !result.shouldReject) ?? null;
 
   return {
@@ -45,6 +80,9 @@ function compareScoringResults(left: TitleCandidateScoringResult, right: TitleCa
 
 function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], strategy: SpatialStrategy): TitleCandidateScoringResult {
   const reasons: string[] = []; const warnings: string[] = [];
+  const arrangementSignature = createArrangementSignature(blueprint);
+  const diversityGroupKey = getDiversityGroupKey(arrangementSignature);
+  const similarityMatch = maxSimilarity(blueprint, all, arrangementSignature);
   const parts: ScoreParts = {
     spatialFitScore: spatialFit(blueprint, strategy, reasons),
     lockupIntegrityScore: lockupIntegrity(blueprint, reasons, warnings),
@@ -52,8 +90,8 @@ function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLock
     readabilityScore: readability(blueprint, reasons),
     subtitleSafetyScore: subtitleSafety(blueprint, strategy, reasons, warnings),
     forbiddenZoneAvoidanceScore: forbiddenAvoidance(blueprint, strategy, reasons),
-    candidateDiversityScore: diversity(blueprint, all, warnings),
-    repetitionPenalty: Math.round(maxSimilarity(blueprint, all) * 30),
+    candidateDiversityScore: diversity(blueprint, all, arrangementSignature, similarityMatch, warnings),
+    repetitionPenalty: Math.round(similarityMatch.score * 30),
     fallbackPenalty: blueprint.isFallbackCandidate ? 100 : 0,
   };
   const totalScore = clamp(
@@ -65,7 +103,56 @@ function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLock
     parts.lockupIntegrityScore < 60 || parts.readabilityScore < 50 || parts.forbiddenZoneAvoidanceScore < 70;
 
   if (blueprint.isFallbackCandidate) warnings.push("fallback candidate is diagnostic only and cannot be selected as final output.");
-  return { candidateId: blueprint.candidateId, rank: 0, shouldEnterRefiner: false, shouldReject, score: { ...parts, totalScore, reasons, warnings } };
+  return {
+    candidateId: blueprint.candidateId,
+    rank: 0,
+    shouldEnterRefiner: false,
+    shouldReject,
+    score: { ...parts, totalScore, reasons, warnings },
+    diagnostic: {
+      arrangementSignature,
+      diversityGroupKey,
+      nearestSimilarCandidateId: similarityMatch.candidateId,
+      maxStructuralSimilarity: Number(similarityMatch.score.toFixed(2)),
+      refinerSelectionReason: "pending refiner selection.",
+    },
+  };
+}
+
+function selectRefinerCandidates(results: readonly TitleCandidateScoringResult[]): RefinerSelection {
+  const selectedIds = new Set<string>(); const reasons = new Map<string, string>();
+  const eligible = results.filter((result) => !result.shouldReject);
+  const selectedGroups = new Map<string, string>();
+
+  for (const result of results) if (result.shouldReject) reasons.set(result.candidateId, "held: rejected candidate cannot enter refiner.");
+  if (!eligible[0]) return { selectedIds, reasons };
+
+  addRefinerSelection(eligible[0], "selected: top eligible non-rejected candidate.", selectedIds, selectedGroups, reasons);
+
+  for (const result of eligible.slice(1)) {
+    if (selectedIds.size >= 3) break;
+    if (result.score.totalScore < 60) continue;
+    if (selectedGroups.has(result.diagnostic.diversityGroupKey)) continue;
+    addRefinerSelection(result, "selected: highest scoring candidate from a different structural diversity group.", selectedIds, selectedGroups, reasons);
+  }
+
+  for (const result of eligible) {
+    if (selectedIds.has(result.candidateId)) continue;
+    if (result.score.totalScore < 60) {
+      reasons.set(result.candidateId, "held: below secondary refiner score threshold after top eligible was selected.");
+      continue;
+    }
+    const owner = selectedGroups.get(result.diagnostic.diversityGroupKey);
+    reasons.set(result.candidateId, owner ? `held: diversity group already represented by ${owner}.` : "held: refiner diversity quota reached.");
+  }
+
+  return { selectedIds, reasons };
+}
+
+function addRefinerSelection(result: TitleCandidateScoringResult, reason: string, selectedIds: Set<string>, selectedGroups: Map<string, string>, reasons: Map<string, string>): void {
+  selectedIds.add(result.candidateId);
+  selectedGroups.set(result.diagnostic.diversityGroupKey, result.candidateId);
+  reasons.set(result.candidateId, reason);
 }
 
 function spatialFit(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, reasons: string[]): number {
@@ -135,31 +222,154 @@ function forbiddenAvoidance(blueprint: TitleLockupBlueprint, strategy: SpatialSt
   return clamp(score);
 }
 
-function diversity(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], warnings: string[]): number {
-  const value = clamp(100 - maxSimilarity(blueprint, all) * 75);
+function diversity(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], signature: ArrangementSignature, similarityMatch: SimilarityMatch, warnings: string[]): number {
+  const duplicateGroupIds = all
+    .filter((item) => item.candidateId !== blueprint.candidateId && getDiversityGroupKey(createArrangementSignature(item)) === getDiversityGroupKey(signature))
+    .map((item) => item.candidateId);
+  const value = clamp(100 - similarityMatch.score * 72 - duplicateGroupIds.length * 4);
+  if (duplicateGroupIds.length > 0) warnings.push(`candidate repeats diversity group with ${duplicateGroupIds.join(",")}.`);
   if (value < 60) warnings.push("candidate is structurally similar to another candidate.");
   return value;
 }
 
-function maxSimilarity(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[]): number {
-  return Math.max(0, ...all.filter((item) => item.candidateId !== blueprint.candidateId).map((item) => similarity(blueprint, item)));
+function maxSimilarity(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], signature = createArrangementSignature(blueprint)): SimilarityMatch {
+  return all.filter((item) => item.candidateId !== blueprint.candidateId).reduce<SimilarityMatch>((best, item) => {
+    const score = similarity(blueprint, item, signature, createArrangementSignature(item));
+
+    return score > best.score ? { candidateId: item.candidateId, score } : best;
+  }, { candidateId: null, score: 0 });
 }
 
-function similarity(left: TitleLockupBlueprint, right: TitleLockupBlueprint): number {
+function similarity(left: TitleLockupBlueprint, right: TitleLockupBlueprint, leftSignature = createArrangementSignature(left), rightSignature = createArrangementSignature(right)): number {
   let score = 0;
-  if (left.compositionMode === right.compositionMode) score += 0.25;
-  if (left.semanticSplitId === right.semanticSplitId) score += 0.2;
-  if (left.flowAxis === right.flowAxis) score += 0.1;
-  if (left.titleUnits.length === right.titleUnits.length) score += 0.1;
-  if (Math.abs(aspect(left.lockupBox) - aspect(right.lockupBox)) < 0.15) score += 0.12;
-  if (Math.abs(ySpan(left) - ySpan(right)) < 45) score += 0.13;
-  if (distance(left.lockupBox, right.lockupBox) < 70) score += 0.1;
+  if (getDiversityGroupKey(leftSignature) === getDiversityGroupKey(rightSignature)) score += 0.42;
+  if (leftSignature.structuralFamily === rightSignature.structuralFamily) score += 0.14;
+  if (leftSignature.semanticSplitId === rightSignature.semanticSplitId) score += 0.1;
+  if (leftSignature.compositionMode === rightSignature.compositionMode) score += 0.08;
+  if (leftSignature.flowAxis === rightSignature.flowAxis) score += 0.05;
+  if (leftSignature.unitCount === rightSignature.unitCount) score += 0.06;
+  if (leftSignature.ySpanBucket === rightSignature.ySpanBucket) score += 0.05;
+  if (leftSignature.xOffsetPattern === rightSignature.xOffsetPattern) score += 0.04;
+  if (leftSignature.heroPosition === rightSignature.heroPosition) score += 0.04;
+  if (leftSignature.subtitleVisibility === rightSignature.subtitleVisibility) score += 0.02;
+  if (leftSignature.patternKeyGroup === rightSignature.patternKeyGroup) score += 0.03;
+  if (Math.abs(aspect(left.lockupBox) - aspect(right.lockupBox)) < 0.15) score += 0.04;
+  if (distance(left.lockupBox, right.lockupBox) < 70) score += 0.04;
   return Math.min(1, score);
 }
 
+function createArrangementSignature(blueprint: TitleLockupBlueprint): ArrangementSignature {
+  const unitCount = blueprint.titleUnits.length;
+  const ySpanBucket = getYSpanBucket(blueprint);
+  const xOffsetPattern = getXOffsetPattern(blueprint);
+  const heroPosition = getHeroPosition(blueprint);
+  const subtitleVisibility = !blueprint.subtitleLockup.subtitleBox || blueprint.subtitleLockup.placementPolicy === "hidden" ? "hidden" : "visible";
+
+  return {
+    semanticSplitId: blueprint.semanticSplitId,
+    compositionMode: blueprint.compositionMode,
+    flowAxis: blueprint.flowAxis,
+    unitCount,
+    ySpanBucket,
+    xOffsetPattern,
+    heroPosition,
+    subtitlePlacement: blueprint.subtitleLockup.placementPolicy,
+    subtitleVisibility,
+    patternKeyGroup: getPatternKeyGroup(blueprint.patternKeys),
+    structuralFamily: getStructuralFamily(blueprint, unitCount, xOffsetPattern),
+  };
+}
+
+function getDiversityGroupKey(signature: ArrangementSignature): string {
+  return [
+    signature.semanticSplitId,
+    signature.unitCount,
+    signature.ySpanBucket,
+    signature.heroPosition,
+    signature.subtitleVisibility,
+  ].join(":");
+}
+
+function getYSpanBucket(blueprint: TitleLockupBlueprint): YSpanBucket {
+  const ratio = ySpan(blueprint) / Math.max(1, blueprint.lockupBox.height);
+  if (ratio < 0.12) return "flat";
+  if (ratio < 0.28) return "compact";
+  if (ratio < 0.52) return "medium";
+  return "tall";
+}
+
+function getXOffsetPattern(blueprint: TitleLockupBlueprint): XOffsetPattern {
+  const units = orderedUnits(blueprint);
+  if (units.length === 0) return "unknown";
+  if (units.length === 1) return "single";
+
+  const centerX = blueprint.lockupBox.x + blueprint.lockupBox.width / 2;
+  const offsets = units.map((unit) => (unit.unitBox.x + unit.unitBox.width / 2 - centerX) / Math.max(1, blueprint.lockupBox.width));
+  const maxAbsOffset = Math.max(...offsets.map((offset) => Math.abs(offset)));
+  if (maxAbsOffset < 0.045) return "centered";
+
+  const first = offsets[0]; const second = offsets[1]; const last = offsets[offsets.length - 1];
+  if (first < -0.035 && second > 0.035) return "leftRightStagger";
+  if (first > 0.035 && second < -0.035) return "rightLeftStagger";
+  if (first < -0.035 && last > 0.035) return "diagonalDown";
+  if (first > 0.035 && last < -0.035) return "diagonalUp";
+  return "unknown";
+}
+
+function getHeroPosition(blueprint: TitleLockupBlueprint): HeroPosition {
+  if (blueprint.titleUnits.length === 1) return "single";
+  const hero = blueprint.titleUnits
+    .filter((unit) => unit.visualRole === "hero")
+    .sort((left, right) => right.visualWeight - left.visualWeight)[0];
+  if (!hero) return "unknown";
+
+  const ratio = (hero.unitBox.y + hero.unitBox.height / 2 - blueprint.lockupBox.y) / Math.max(1, blueprint.lockupBox.height);
+  if (ratio < 0.35) return "top";
+  if (ratio > 0.65) return "bottom";
+  return "middle";
+}
+
+function getPatternKeyGroup(patternKeys: readonly string[]): string {
+  const groups = Array.from(new Set(patternKeys.map((key) => {
+    if (key.startsWith("stage")) return "stage";
+    if (key.startsWith("business")) return "business";
+    if (key.startsWith("modernChinese")) return "chinese";
+    if (key.startsWith("campaign")) return "campaign";
+    if (key.startsWith("literary")) return "literary";
+    if (key.startsWith("ip")) return "ip";
+    if (key.startsWith("clean")) return "clean";
+    return "unknown";
+  }))).sort();
+
+  return groups.join("+") || "none";
+}
+
+function getStructuralFamily(blueprint: TitleLockupBlueprint, unitCount: number, xOffsetPattern: XOffsetPattern): StructuralFamily {
+  if (unitCount === 1 || blueprint.semanticSplitId === "fullHero") return "fullHeroSingle";
+  if (blueprint.compositionMode === "staggeredColumn" || (unitCount >= 3 && xOffsetPattern !== "centered")) return "threeStepVerticalStagger";
+  if (blueprint.compositionMode === "verticalHeroStack") return "verticalHeroStack";
+  if (blueprint.compositionMode === "centerStageLockup" && unitCount === 2) return "centerStageDouble";
+  if (blueprint.compositionMode === "badgeHeroLockup" && unitCount === 2) return "badgeHeroDouble";
+  if (unitCount === 2 && blueprint.semanticSplitId.toLowerCase().includes("hero")) return "leadHeroDoubleHorizontal";
+  return "other";
+}
+
 function usesVerticalOrganization(blueprint: TitleLockupBlueprint): boolean {
-  return blueprint.flowAxis === "vertical" || blueprint.titleUnits.some((unit) => unit.direction === "vertical") ||
-    ySpan(blueprint) >= Math.max(60, blueprint.lockupBox.height * 0.22);
+  if (blueprint.flowAxis === "vertical" || blueprint.compositionMode === "verticalHeroStack" || blueprint.compositionMode === "staggeredColumn") return true;
+  if (blueprint.titleUnits.some((unit) => unit.direction === "vertical")) return true;
+  if (blueprint.titleUnits.length < 2) return false;
+
+  const span = ySpan(blueprint);
+  const spanThreshold = Math.max(40, Math.min(120, blueprint.lockupBox.height * 0.22));
+  if (
+    blueprint.orientationPreference === "verticalFirst" &&
+    (blueprint.compositionMode === "centerStageLockup" || blueprint.compositionMode === "badgeHeroLockup") &&
+    span >= spanThreshold
+  ) {
+    return true;
+  }
+
+  return aspect(blueprint.lockupBox) > 1.15 && span >= spanThreshold || span >= 80;
 }
 
 function overlapsAny(box: TitleBox, zones: readonly ForbiddenZone[]): boolean {
@@ -193,9 +403,12 @@ function distance(left: TitleBox, right: TitleBox): number {
   const leftCenter = center(left); const rightCenter = center(right);
   return Math.sqrt((leftCenter.x - rightCenter.x) ** 2 + (leftCenter.y - rightCenter.y) ** 2);
 }
+function orderedUnits(blueprint: TitleLockupBlueprint): TitleLockupBlueprint["titleUnits"] {
+  return blueprint.titleUnits.slice().sort((left, right) => left.readingOrder - right.readingOrder);
+}
 function ySpan(blueprint: TitleLockupBlueprint): number {
   if (blueprint.titleUnits.length < 2) return 0;
-  const centers = blueprint.titleUnits.map((unit) => unit.unitBox.y + unit.unitBox.height / 2);
+  const centers = orderedUnits(blueprint).map((unit) => unit.unitBox.y + unit.unitBox.height / 2);
   return Math.max(...centers) - Math.min(...centers);
 }
 function penalty(score: number, amount: number, reasons: string[], reason: string): number { reasons.push(reason); return score - amount; }
