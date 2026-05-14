@@ -8,8 +8,24 @@ export type TitleCandidateScoreBreakdown = {
   subtitleSafetyScore: number; forbiddenZoneAvoidanceScore: number; candidateDiversityScore: number;
   repetitionPenalty: number; fallbackPenalty: number; totalScore: number; reasons: string[]; warnings: string[];
 };
+export type RecommendedAction = "refine" | "keep" | "reject";
+export type RejectionReasonCode =
+  | "fallback_candidate"
+  | "strategy_mismatch_vertical_first"
+  | "unsafe_spatial_fit"
+  | "unsafe_forbidden_zone_overlap"
+  | "unsafe_subtitle"
+  | "none";
+export type KeepButDoNotRefineReason =
+  | "diversity_group_already_represented"
+  | "below_refiner_threshold"
+  | "max_refiner_candidates_reached"
+  | "candidate_safe_but_lower_priority"
+  | "none";
 export type TitleCandidateScoringResult = {
   candidateId: string; rank: number; score: TitleCandidateScoreBreakdown; shouldEnterRefiner: boolean; shouldReject: boolean;
+  recommendedAction: RecommendedAction; rejectionReasonCode: RejectionReasonCode; rawScoreRank: number; finalRank: number;
+  refinerPriority?: number; keepButDoNotRefineReason?: KeepButDoNotRefineReason;
   diagnostic: TitleCandidateScoringDiagnostic;
 };
 export type ScoreTitleCandidatesResult = {
@@ -42,20 +58,34 @@ type ArrangementSignature = {
   structuralFamily: StructuralFamily;
 };
 type SimilarityMatch = { candidateId: string | null; score: number };
-type RefinerSelection = { selectedIds: Set<string>; reasons: Map<string, string> };
+type RefinerSelection = {
+  selectedIds: Set<string>;
+  reasons: Map<string, string>;
+  priorities: Map<string, number>;
+  keepReasons: Map<string, KeepButDoNotRefineReason>;
+};
 
 export function scoreTitleCandidates(input: ScoreTitleCandidatesInput): ScoreTitleCandidatesResult {
-  const rankedResults = input.lockupBlueprints
-    .map((blueprint) => scoreBlueprint(blueprint, input.lockupBlueprints, input.spatialStrategy))
+  const scoredResults = input.lockupBlueprints
+    .map((blueprint) => scoreBlueprint(blueprint, input.lockupBlueprints, input.spatialStrategy));
+  const rawRankByCandidateId = getRawRankByCandidateId(scoredResults);
+  const rankedResults = scoredResults
     .sort(compareScoringResults)
     .map((result, index) => ({
       ...result,
       rank: index + 1,
+      finalRank: index + 1,
+      rawScoreRank: rawRankByCandidateId.get(result.candidateId) ?? index + 1,
     }));
   const selection = selectRefinerCandidates(rankedResults);
   const results = rankedResults.map((result) => ({
     ...result,
     shouldEnterRefiner: selection.selectedIds.has(result.candidateId),
+    recommendedAction: getRecommendedAction(result.shouldReject, selection.selectedIds.has(result.candidateId)),
+    refinerPriority: selection.priorities.get(result.candidateId),
+    keepButDoNotRefineReason: result.shouldReject || selection.selectedIds.has(result.candidateId)
+      ? "none"
+      : selection.keepReasons.get(result.candidateId) ?? "candidate_safe_but_lower_priority",
     diagnostic: {
       ...result.diagnostic,
       refinerSelectionReason: selection.reasons.get(result.candidateId) ?? "held: not selected for refiner calibration.",
@@ -76,6 +106,19 @@ function compareScoringResults(left: TitleCandidateScoringResult, right: TitleCa
   if (left.shouldReject !== right.shouldReject) return left.shouldReject ? 1 : -1;
 
   return right.score.totalScore - left.score.totalScore;
+}
+
+function compareRawScoreResults(left: TitleCandidateScoringResult, right: TitleCandidateScoringResult): number {
+  return right.score.totalScore - left.score.totalScore;
+}
+
+function getRawRankByCandidateId(results: readonly TitleCandidateScoringResult[]): Map<string, number> {
+  return new Map<string, number>(
+    results
+      .slice()
+      .sort(compareRawScoreResults)
+      .map((result, index): [string, number] => [result.candidateId, index + 1]),
+  );
 }
 
 function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], strategy: SpatialStrategy): TitleCandidateScoringResult {
@@ -101,13 +144,19 @@ function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLock
   );
   const shouldReject = blueprint.isFallbackCandidate || parts.spatialFitScore < 55 ||
     parts.lockupIntegrityScore < 60 || parts.readabilityScore < 50 || parts.forbiddenZoneAvoidanceScore < 70;
+  const rejectionReasonCode = getRejectionReasonCode(blueprint, parts, strategy, shouldReject);
 
   if (blueprint.isFallbackCandidate) warnings.push("fallback candidate is diagnostic only and cannot be selected as final output.");
   return {
     candidateId: blueprint.candidateId,
     rank: 0,
+    rawScoreRank: 0,
+    finalRank: 0,
     shouldEnterRefiner: false,
     shouldReject,
+    recommendedAction: "reject",
+    rejectionReasonCode,
+    keepButDoNotRefineReason: "none",
     score: { ...parts, totalScore, reasons, warnings },
     diagnostic: {
       arrangementSignature,
@@ -121,38 +170,83 @@ function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLock
 
 function selectRefinerCandidates(results: readonly TitleCandidateScoringResult[]): RefinerSelection {
   const selectedIds = new Set<string>(); const reasons = new Map<string, string>();
+  const priorities = new Map<string, number>(); const keepReasons = new Map<string, KeepButDoNotRefineReason>();
   const eligible = results.filter((result) => !result.shouldReject);
   const selectedGroups = new Map<string, string>();
 
-  for (const result of results) if (result.shouldReject) reasons.set(result.candidateId, "held: rejected candidate cannot enter refiner.");
-  if (!eligible[0]) return { selectedIds, reasons };
+  for (const result of results) {
+    if (result.shouldReject) {
+      reasons.set(result.candidateId, "held: rejected candidate cannot enter refiner.");
+      keepReasons.set(result.candidateId, "none");
+    }
+  }
+  if (!eligible[0]) return { selectedIds, reasons, priorities, keepReasons };
 
-  addRefinerSelection(eligible[0], "selected: top eligible non-rejected candidate.", selectedIds, selectedGroups, reasons);
+  addRefinerSelection(eligible[0], "selected: top eligible non-rejected candidate.", selectedIds, selectedGroups, reasons, priorities);
 
   for (const result of eligible.slice(1)) {
     if (selectedIds.size >= 3) break;
     if (result.score.totalScore < 60) continue;
     if (selectedGroups.has(result.diagnostic.diversityGroupKey)) continue;
-    addRefinerSelection(result, "selected: highest scoring candidate from a different structural diversity group.", selectedIds, selectedGroups, reasons);
+    addRefinerSelection(result, "selected: highest scoring candidate from a different structural diversity group.", selectedIds, selectedGroups, reasons, priorities);
   }
 
   for (const result of eligible) {
     if (selectedIds.has(result.candidateId)) continue;
     if (result.score.totalScore < 60) {
       reasons.set(result.candidateId, "held: below secondary refiner score threshold after top eligible was selected.");
+      keepReasons.set(result.candidateId, "below_refiner_threshold");
       continue;
     }
     const owner = selectedGroups.get(result.diagnostic.diversityGroupKey);
     reasons.set(result.candidateId, owner ? `held: diversity group already represented by ${owner}.` : "held: refiner diversity quota reached.");
+    keepReasons.set(result.candidateId, owner ? "diversity_group_already_represented" : "max_refiner_candidates_reached");
   }
 
-  return { selectedIds, reasons };
+  return { selectedIds, reasons, priorities, keepReasons };
 }
 
-function addRefinerSelection(result: TitleCandidateScoringResult, reason: string, selectedIds: Set<string>, selectedGroups: Map<string, string>, reasons: Map<string, string>): void {
+function addRefinerSelection(result: TitleCandidateScoringResult, reason: string, selectedIds: Set<string>, selectedGroups: Map<string, string>, reasons: Map<string, string>, priorities: Map<string, number>): void {
+  const priority = 100 - selectedIds.size * 10;
+
   selectedIds.add(result.candidateId);
   selectedGroups.set(result.diagnostic.diversityGroupKey, result.candidateId);
   reasons.set(result.candidateId, reason);
+  priorities.set(result.candidateId, priority);
+}
+
+function getRecommendedAction(shouldReject: boolean, shouldEnterRefiner: boolean): RecommendedAction {
+  if (shouldReject) return "reject";
+  return shouldEnterRefiner ? "refine" : "keep";
+}
+
+function getRejectionReasonCode(
+  blueprint: TitleLockupBlueprint,
+  parts: ScoreParts,
+  strategy: SpatialStrategy,
+  shouldReject: boolean,
+): RejectionReasonCode {
+  if (!shouldReject) return "none";
+  if (blueprint.isFallbackCandidate) return "fallback_candidate";
+  if (
+    strategy.orientationPreference === "verticalFirst" &&
+    !usesVerticalOrganization(blueprint)
+  ) {
+    return "strategy_mismatch_vertical_first";
+  }
+  if (
+    strategy.backgroundLayout.negativeSpaceShape === "verticalColumn" &&
+    !usesVerticalOrganization(blueprint)
+  ) {
+    return "strategy_mismatch_vertical_first";
+  }
+  if (parts.forbiddenZoneAvoidanceScore < 70) return "unsafe_forbidden_zone_overlap";
+  if (parts.subtitleSafetyScore < 70) return "unsafe_subtitle";
+  if (parts.spatialFitScore < 55 || parts.lockupIntegrityScore < 60 || parts.readabilityScore < 50) {
+    return "unsafe_spatial_fit";
+  }
+
+  return "unsafe_spatial_fit";
 }
 
 function spatialFit(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, reasons: string[]): number {

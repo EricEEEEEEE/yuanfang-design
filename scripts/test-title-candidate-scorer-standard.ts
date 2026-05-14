@@ -58,9 +58,41 @@ async function main(): Promise<void> {
       .join(" | "),
   );
   console.error(
+    "SCORER_RECOMMENDED_ACTIONS",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.recommendedAction}`)
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_REJECTION_REASON_CODES",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.rejectionReasonCode}`)
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_RAW_SCORE_RANKING",
+    scoringResult.results
+      .slice()
+      .sort((left, right) => left.rawScoreRank - right.rawScoreRank)
+      .map((result) => `${result.rawScoreRank}:${result.candidateId}:${result.score.totalScore}:${result.shouldReject ? "reject" : "keep"}`)
+      .join(" | "),
+  );
+  console.error(
     "SCORER_FINAL_RANKING",
     finalRanking
       .map((result) => `${result.rank}:${result.candidateId}:${result.score.totalScore}:${result.shouldEnterRefiner ? "refiner" : "keep"}`)
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_REFINER_PRIORITIES",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.refinerPriority ?? "none"}`)
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_KEEP_REASONS",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.keepButDoNotRefineReason ?? "none"}`)
       .join(" | "),
   );
   console.error(
@@ -104,6 +136,12 @@ async function main(): Promise<void> {
     JSON.stringify(scoringResult.results.map((result) => ({
       candidateId: result.candidateId,
       rank: result.rank,
+      rawScoreRank: result.rawScoreRank,
+      finalRank: result.finalRank,
+      recommendedAction: result.recommendedAction,
+      rejectionReasonCode: result.rejectionReasonCode,
+      refinerPriority: result.refinerPriority ?? null,
+      keepButDoNotRefineReason: result.keepButDoNotRefineReason ?? "none",
       score: result.score,
       shouldEnterRefiner: result.shouldEnterRefiner,
       shouldReject: result.shouldReject,
