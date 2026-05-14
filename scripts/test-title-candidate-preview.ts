@@ -39,6 +39,9 @@ async function main(): Promise<void> {
   console.log("PREVIEW_SOURCE", candidateResult.source);
   console.log("PREVIEW_REASON", candidateResult.reason);
   console.log("PREVIEW_CANDIDATE_COUNT", candidateResult.candidates.length);
+  if (candidateResult.source === "fallback") {
+    console.log("PREVIEW_SOURCE fallback FAIL", candidateResult.reason);
+  }
   console.log("PREVIEW_BLUEPRINT_COUNT", candidateResult.lockupBlueprints.length);
   console.log("PREVIEW_DEBUG_OVERLAY", "true");
   console.log("SPATIAL_STRATEGY_SOURCE", candidateResult.spatialStrategy.source);

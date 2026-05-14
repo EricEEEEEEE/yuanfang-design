@@ -29,6 +29,9 @@ async function main(): Promise<void> {
   console.error("TITLE_CANDIDATES_SOURCE", result.source);
   console.error("TITLE_CANDIDATES_REASON", result.reason);
   console.error("TITLE_CANDIDATES_COUNT", result.candidates.length);
+  if (result.source === "fallback") {
+    console.error("TITLE_CANDIDATES_SOURCE fallback FAIL", result.reason);
+  }
   if (result.source === "fallback" && result.candidates.length === 0) {
     console.error("TITLE_CANDIDATES_COUNT 0 FAIL", result.reason);
   }

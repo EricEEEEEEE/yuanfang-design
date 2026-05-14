@@ -2163,12 +2163,106 @@ function getTextAnchorById(
   const anchor = spatialStrategy.backgroundLayout.textAnchors.find((item) => item.id === spatialAnchorId);
 
   if (anchor) {
-    return anchor;
+    return normalizePrimaryTextAnchor(spatialStrategy, anchor);
   }
 
   return spatialAnchorId === spatialStrategy.primaryTextAnchorId
     ? fallbackTextAnchor(spatialAnchorId)
     : undefined;
+}
+
+function normalizePrimaryTextAnchor(
+  spatialStrategy: SpatialStrategy,
+  anchor: TextAnchor,
+): TextAnchor {
+  if (
+    anchor.id !== spatialStrategy.primaryTextAnchorId ||
+    spatialStrategy.orientationPreference !== "verticalFirst"
+  ) {
+    return anchor;
+  }
+
+  const safeZone = spatialStrategy.backgroundLayout.safeZones.find((zone) => zone.id === anchor.safeZoneId);
+
+  if (!safeZone || safeZone.shape !== "verticalColumn") {
+    return anchor;
+  }
+
+  const expandedAnchor = expandPrimaryAnchorFromVerticalSafeZone(anchor, safeZone);
+
+  return expandedAnchor.height > anchor.height ? avoidForbiddenZonesForPrimaryAnchor(
+    expandedAnchor,
+    safeZone,
+    spatialStrategy.backgroundLayout.forbiddenZones,
+  ) : anchor;
+}
+
+function expandPrimaryAnchorFromVerticalSafeZone(
+  anchor: TextAnchor,
+  safeZone: { x: number; y: number; width: number; height: number },
+): TextAnchor {
+  const targetHeight = Math.round(Math.min(
+    safeZone.height - 2,
+    Math.max(anchor.height, safeZone.height * 0.78, 360),
+  ));
+
+  if (anchor.height >= targetHeight * 0.82) {
+    return anchor;
+  }
+
+  const targetWidth = Math.round(Math.min(
+    safeZone.width - 2,
+    Math.max(anchor.width, safeZone.width * 0.76),
+  ));
+  const x = Math.round(clamp(
+    safeZone.x + (safeZone.width - targetWidth) / 2,
+    safeZone.x + 1,
+    safeZone.x + safeZone.width - targetWidth - 1,
+  ));
+  const y = Math.round(clamp(
+    safeZone.y + safeZone.height * 0.08,
+    safeZone.y + 1,
+    safeZone.y + safeZone.height - targetHeight - 1,
+  ));
+
+  return {
+    ...anchor,
+    x,
+    y,
+    width: targetWidth,
+    height: targetHeight,
+    preferredOrientation: "vertical",
+    reason: `${anchor.reason} System expanded primary anchor from verticalColumn safeZone.`,
+  };
+}
+
+function avoidForbiddenZonesForPrimaryAnchor(
+  anchor: TextAnchor,
+  safeZone: { x: number; y: number; width: number; height: number },
+  forbiddenZones: readonly { x: number; y: number; width: number; height: number }[],
+): TextAnchor {
+  let y = anchor.y;
+  let height = anchor.height;
+  const gap = 8;
+  const minHeight = Math.min(320, Math.max(220, safeZone.height * 0.52));
+
+  for (const zone of forbiddenZones) {
+    if (boxOverlapRatio(anchor, zone) <= 0.02) continue;
+
+    const zoneBottom = zone.y + zone.height;
+
+    if (zoneBottom <= y + height * 0.42 && height - (zoneBottom + gap - y) >= minHeight) {
+      height -= zoneBottom + gap - y;
+      y = zoneBottom + gap;
+    } else if (zone.y >= y + height * 0.58 && zone.y - gap - y >= minHeight) {
+      height = zone.y - gap - y;
+    }
+  }
+
+  height = Math.round(clamp(height, minHeight, safeZone.height - 2));
+  y = Math.round(clamp(y, safeZone.y + 1, safeZone.y + safeZone.height - height - 1));
+
+  return { ...anchor, y, height };
 }
 
 function fallbackTextAnchor(id: string): TextAnchor {

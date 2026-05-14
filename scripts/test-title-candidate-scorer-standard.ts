@@ -33,6 +33,9 @@ async function main(): Promise<void> {
   const rejectedRanking = scoringResult.results.filter((result) => result.shouldReject);
 
   console.error("TITLE_CANDIDATES_SOURCE", candidateResult.source);
+  if (candidateResult.source === "fallback") {
+    console.error("TITLE_CANDIDATES_SOURCE fallback FAIL", candidateResult.reason);
+  }
   console.error("TITLE_LOCKUP_BLUEPRINT_COUNT", candidateResult.lockupBlueprints.length);
   console.error(
     "BLUEPRINT_IS_FALLBACK_FLAGS",
