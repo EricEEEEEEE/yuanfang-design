@@ -28,6 +28,75 @@ async function main(): Promise<void> {
   console.error("TITLE_CANDIDATES_SOURCE", result.source);
   console.error("TITLE_CANDIDATES_REASON", result.reason);
   console.error("TITLE_CANDIDATES_COUNT", result.candidates.length);
+  console.error("STRUCTURED_OUTPUT_MODE", result.structuredOutputMode);
+  console.error("LOCKUP_DRAFT_COUNT", result.lockupDraftCount);
+  console.error("LOCKUP_DRAFT_FIELDS", result.lockupDraftFields.join(","));
+  console.error(
+    "FIRST_DRAFT_UNIT_LAYOUT_HINTS",
+    JSON.stringify(result.firstDraftUnitLayoutHints),
+  );
+  console.error("TITLE_LOCKUP_BLUEPRINT_COUNT", result.lockupBlueprints.length);
+  console.error(
+    "TITLE_LOCKUP_BLUEPRINTS",
+    result.lockupBlueprints
+      .map((blueprint) => [
+        blueprint.candidateId,
+        blueprint.spatialAnchorId,
+        blueprint.semanticSplitId,
+        blueprint.compositionMode,
+        blueprint.flowAxis,
+      ].join(":"))
+      .join(" | "),
+  );
+  console.error(
+    "BLUEPRINT_CANDIDATE_IDS",
+    result.lockupBlueprints.map((blueprint) => blueprint.candidateId).join(","),
+  );
+  console.error(
+    "BLUEPRINT_PATTERN_KEYS",
+    result.lockupBlueprints
+      .map((blueprint) => `${blueprint.candidateId}:${blueprint.patternKeys.join("+")}`)
+      .join(" | "),
+  );
+  console.error(
+    "BLUEPRINT_COMPOSITION_MODES",
+    result.lockupBlueprints.map((blueprint) => blueprint.compositionMode).join(","),
+  );
+  console.error(
+    "BLUEPRINT_FLOW_AXES",
+    result.lockupBlueprints.map((blueprint) => blueprint.flowAxis).join(","),
+  );
+  console.error(
+    "BLUEPRINT_ORIENTATION_PREFERENCES",
+    result.lockupBlueprints.map((blueprint) => blueprint.orientationPreference).join(","),
+  );
+  console.error(
+    "BLUEPRINT_SEMANTIC_SPLITS",
+    result.lockupBlueprints.map((blueprint) => blueprint.semanticSplitId).join(","),
+  );
+  console.error(
+    "BLUEPRINT_IS_FALLBACK_FLAGS",
+    result.lockupBlueprints.map((blueprint) => String(blueprint.isFallbackCandidate)).join(","),
+  );
+  console.error(
+    "FIRST_BLUEPRINT_LOCKUP_BOX",
+    JSON.stringify(result.lockupBlueprints[0]?.lockupBox ?? null),
+  );
+  console.error(
+    "FIRST_BLUEPRINT_READING_ORDER",
+    JSON.stringify(result.lockupBlueprints[0]?.readingOrder ?? null),
+  );
+  console.error(
+    "FIRST_BLUEPRINT_UNIT_BOXES",
+    JSON.stringify(result.lockupBlueprints[0]?.titleUnits.map((unit) => ({
+      text: unit.text,
+      box: unit.unitBox,
+    })) ?? null),
+  );
+  console.error(
+    "FIRST_BLUEPRINT_SUBTITLE_LOCKUP",
+    JSON.stringify(result.lockupBlueprints[0]?.subtitleLockup ?? null),
+  );
   console.error("SPATIAL_STRATEGY_SOURCE", result.spatialStrategy.source);
   console.error("CONTENT_INTENT", result.spatialStrategy.contentIntent);
   console.error("STRATEGY_MODE", result.spatialStrategy.strategyMode);
