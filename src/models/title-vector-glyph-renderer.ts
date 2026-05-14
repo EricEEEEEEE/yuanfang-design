@@ -13,11 +13,15 @@ export type { StandardFontKey, StandardTitleArtStyleKey };
 export type VectorGlyphRenderSource = "pipelineFinalPool" | "debug" | "manual";
 export type VectorGlyphRenderMode = "debug" | "production";
 export type VectorGlyphOutputFormat = "svg" | "sharpLayer";
+export type VectorGlyphOutputTarget = "debugSvg" | "measurementSvg" | "rasterLayer" | "standaloneSvg";
+export type VectorGlyphFontEmbedMode = "full" | "subset" | "external" | "none";
+export type VectorGlyphMeasurementRequirement = "estimatedOnly" | "rasterRequiredForProduction";
 export type VectorGlyphRendererResultSource = "vector-glyph-renderer-v1";
 export type VectorTitleLayerKind = "glyphRun" | "subtitle" | "decoration" | "debug";
 export type VectorTitleRole = TitleLockupUnit["visualRole"] | "subtitle";
 export type VectorGlyphWarningSeverity = "info" | "warning" | "error";
 export type TitleFontResolveStatus = "available" | "fallback" | "missing" | "unavailable";
+export type VectorGlyphSizeBudgetStatus = "ok" | "warning" | "blocked";
 export type TitleFontPresetKey =
   | StandardTitleArtStyleKey
   | "achievement"
@@ -129,6 +133,21 @@ export type VectorGlyphSafetyResult = {
   checks: VectorGlyphSafetyCheck[];
 };
 
+export type VectorGlyphSizeBudget = {
+  debugSvgWarningBytes: number;
+  standaloneSvgWarningBytes: number;
+  productionHardLimitBytes: number;
+  measurementSvgTargetBytes: number;
+};
+
+export type VectorGlyphSizeBudgetResult = {
+  svgLengthBytes: number;
+  status: VectorGlyphSizeBudgetStatus;
+  limitBytes: number;
+  target: VectorGlyphOutputTarget;
+  reason: string;
+};
+
 export type VectorGlyphRenderInput = {
   source: VectorGlyphRenderSource;
   blueprint: TitleLockupBlueprint;
@@ -140,12 +159,21 @@ export type VectorGlyphRenderInput = {
   safetyContext?: { forbiddenZones?: ForbiddenZone[] };
   renderMode: VectorGlyphRenderMode;
   outputFormat: VectorGlyphOutputFormat;
+  outputTarget?: VectorGlyphOutputTarget;
+  fontEmbedMode?: VectorGlyphFontEmbedMode;
+  sizeBudget?: Partial<VectorGlyphSizeBudget>;
+  measurementRequirement?: VectorGlyphMeasurementRequirement;
 };
 
 export type VectorGlyphRenderResult = {
   source: VectorGlyphRendererResultSource;
   candidateId: string;
   sourceCandidateId?: string;
+  outputTarget: VectorGlyphOutputTarget;
+  fontEmbedMode: VectorGlyphFontEmbedMode;
+  measurementRequirement: VectorGlyphMeasurementRequirement;
+  sizeBudget: VectorGlyphSizeBudgetResult;
+  fontCacheKeyPreview: string[];
   svg?: string;
   sharpLayer?: { input: Buffer; top: number; left: number };
   layers: VectorTitleLayer[];

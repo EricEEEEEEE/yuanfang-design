@@ -59,6 +59,8 @@ async function main(): Promise<void> {
     },
     renderMode: "debug",
     outputFormat: "svg",
+    outputTarget: "debugSvg",
+    fontEmbedMode: "full",
   };
   const result = renderTitleVectorGlyph(input);
   if (!result.svg) throw new Error("VECTOR_REAL_SVG_OUTPUT_MISSING");
@@ -67,10 +69,14 @@ async function main(): Promise<void> {
   const mainRuns = result.glyphRuns.filter((run) => run.role !== "subtitle");
   const joinedTitle = mainRuns.map((run) => run.text).join("");
   const estimatedSafety = result.safety.checks.find((check) => check.code === "estimated_measured_boxes_inside_unit");
+  const productionFullEmbedBlocked = result.safety.checks.find((check) => check.code === "production_full_font_embed_blocked");
+  const rasterMeasurementRequired = result.safety.checks.find((check) => check.code === "raster_measurement_required_for_production");
   const fontEmbedded = result.glyphRuns.every((run) => run.fontEmbedded) && result.svg.includes("@font-face");
 
   console.log("VECTOR_REAL_SVG_SOURCE", result.source);
   console.log("VECTOR_REAL_SVG_CANDIDATE_ID", result.candidateId);
+  console.log("VECTOR_REAL_SVG_OUTPUT_TARGET", result.outputTarget);
+  console.log("VECTOR_REAL_SVG_FONT_EMBED_MODE", result.fontEmbedMode);
   console.log("VECTOR_REAL_SVG_MAIN_TITLE", blueprint.mainTitle);
   console.log("VECTOR_REAL_SVG_FONT_KEYS", result.glyphRuns.map((run) => run.font.resolvedFontKey ?? "none").join(","));
   console.log("VECTOR_REAL_SVG_FONT_EMBEDDED", fontEmbedded ? "YES" : "NO");
@@ -78,6 +84,10 @@ async function main(): Promise<void> {
   console.log("VECTOR_REAL_SVG_GLYPH_RUN_TEXTS", result.glyphRuns.map((run) => run.text).join("|"));
   console.log("VECTOR_REAL_SVG_TITLE_JOIN_CHECK", joinedTitle === blueprint.mainTitle ? "PASS" : `FAIL:${joinedTitle}`);
   console.log("VECTOR_REAL_SVG_ESTIMATED_SAFETY", estimatedSafety?.passed ? "PASS" : "FAIL");
+  console.log("VECTOR_REAL_SVG_SIZE_BUDGET_STATUS", result.sizeBudget.status);
+  console.log("VECTOR_REAL_SVG_PRODUCTION_FULL_EMBED_BLOCKED", productionFullEmbedBlocked?.passed === false ? "YES" : "NO");
+  console.log("VECTOR_REAL_SVG_RASTER_MEASUREMENT_REQUIRED", rasterMeasurementRequired?.passed === false ? "YES" : "NO");
+  console.log("VECTOR_REAL_SVG_FONT_CACHE_KEY_PREVIEW", result.fontCacheKeyPreview.join(" | "));
   console.log("VECTOR_REAL_SVG_SAFETY_CHECKS", JSON.stringify(result.safety.checks));
   console.log("VECTOR_REAL_SVG_OUTPUT_PATH", SVG_OUTPUT_PATH);
   console.log("VECTOR_REAL_SVG_SVG_LENGTH", result.svg.length);
