@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
+import type { TitleLockupBlueprint } from "../src/config/title-lockup-blueprint";
 import { generateTitleCandidates } from "../src/services/title-candidate.service";
 
 const BACKGROUND_IMAGE_PATH = "/tmp/yuanfang-title-director-bg.jpg";
@@ -79,6 +80,18 @@ async function main(): Promise<void> {
     result.lockupBlueprints.map((blueprint) => String(blueprint.isFallbackCandidate)).join(","),
   );
   console.error(
+    "BLUEPRINT_VERTICAL_ORGANIZATION_FLAGS",
+    result.lockupBlueprints.map((blueprint) => String(blueprintUsesVerticalOrganization(blueprint))).join(","),
+  );
+  console.error(
+    "BLUEPRINT_LOCKUP_BOX_ASPECTS",
+    result.lockupBlueprints.map((blueprint) => getBlueprintLockupBoxAspect(blueprint)).join(","),
+  );
+  console.error(
+    "BLUEPRINT_UNIT_Y_SPANS",
+    result.lockupBlueprints.map((blueprint) => getBlueprintUnitYSpan(blueprint)).join(","),
+  );
+  console.error(
     "FIRST_BLUEPRINT_LOCKUP_BOX",
     JSON.stringify(result.lockupBlueprints[0]?.lockupBox ?? null),
   );
@@ -113,3 +126,36 @@ main().catch((error: unknown) => {
   console.error("TITLE_CANDIDATES_TEST_FAILED", message);
   process.exit(1);
 });
+
+function blueprintUsesVerticalOrganization(blueprint: TitleLockupBlueprint): boolean {
+  if (blueprint.flowAxis === "vertical") return true;
+  if (blueprint.compositionMode === "verticalHeroStack" || blueprint.compositionMode === "staggeredColumn") return true;
+  if (blueprint.titleUnits.some((unit) => unit.direction === "vertical")) return true;
+  if (blueprint.titleUnits.length < 2) return false;
+
+  const ySpan = getBlueprintUnitYSpan(blueprint);
+  const aspect = getBlueprintLockupBoxAspect(blueprint);
+  const spanThreshold = Math.max(60, Math.min(120, blueprint.lockupBox.height * 0.22));
+
+  if (
+    blueprint.orientationPreference === "verticalFirst" &&
+    (blueprint.compositionMode === "centerStageLockup" || blueprint.compositionMode === "badgeHeroLockup") &&
+    ySpan >= spanThreshold
+  ) {
+    return true;
+  }
+
+  return aspect > 1.15 && ySpan >= spanThreshold || ySpan >= 80;
+}
+
+function getBlueprintUnitYSpan(blueprint: TitleLockupBlueprint): number {
+  if (blueprint.titleUnits.length < 2) return 0;
+
+  const yCenters = blueprint.titleUnits.map((unit) => unit.unitBox.y + unit.unitBox.height / 2);
+
+  return Math.round(Math.max(...yCenters) - Math.min(...yCenters));
+}
+
+function getBlueprintLockupBoxAspect(blueprint: TitleLockupBlueprint): number {
+  return Number((blueprint.lockupBox.height / Math.max(1, blueprint.lockupBox.width)).toFixed(2));
+}

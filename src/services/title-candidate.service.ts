@@ -917,7 +917,10 @@ function validateLockupBlueprintsWithDiagnostic(
     spatialStrategy.orientationPreference === "verticalFirst" &&
     lockupBlueprints.filter(blueprintUsesVerticalOrganization).length < 4
   ) {
-    return lockupFailure("verticalFirst requires at least 4 lockupBlueprints with vertical lockup organization", preview);
+    return lockupFailure(
+      `verticalFirst requires at least 4 lockupBlueprints with vertical lockup organization: ${verticalOrganizationSummary(lockupBlueprints)}`,
+      preview,
+    );
   }
 
   return {
@@ -996,6 +999,8 @@ function normalizeLockupDraftWithReason(
     semanticSplit,
     lockupBox,
     grammar.flowAxis,
+    planItem.compositionMode,
+    toBlueprintOrientationPreference(spatialStrategy.orientationPreference),
     index,
   );
 
@@ -1786,6 +1791,10 @@ function blueprintUsesVerticalOrganization(blueprint: TitleLockupBlueprint): boo
     return true;
   }
 
+  if (blueprint.compositionMode === "verticalHeroStack" || blueprint.compositionMode === "staggeredColumn") {
+    return true;
+  }
+
   if (blueprint.titleUnits.some((unit) => unit.direction === "vertical")) {
     return true;
   }
@@ -1794,10 +1803,48 @@ function blueprintUsesVerticalOrganization(blueprint: TitleLockupBlueprint): boo
     return false;
   }
 
-  const yValues = blueprint.titleUnits.map((unit) => unit.unitBox.y);
-  const yRange = Math.max(...yValues) - Math.min(...yValues);
+  const ySpan = getBlueprintUnitYSpan(blueprint);
+  const aspect = getBlueprintLockupBoxAspect(blueprint);
+  const spanThreshold = Math.max(60, Math.min(120, blueprint.lockupBox.height * 0.22));
 
-  return yRange >= 80;
+  if (
+    blueprint.orientationPreference === "verticalFirst" &&
+    (blueprint.compositionMode === "centerStageLockup" || blueprint.compositionMode === "badgeHeroLockup") &&
+    ySpan >= spanThreshold
+  ) {
+    return true;
+  }
+
+  if (aspect > 1.15 && ySpan >= spanThreshold) {
+    return true;
+  }
+
+  return ySpan >= 80;
+}
+
+function getBlueprintUnitYSpan(blueprint: TitleLockupBlueprint): number {
+  if (blueprint.titleUnits.length < 2) {
+    return 0;
+  }
+
+  const yCenters = blueprint.titleUnits.map((unit) => unit.unitBox.y + unit.unitBox.height / 2);
+
+  return Math.round(Math.max(...yCenters) - Math.min(...yCenters));
+}
+
+function getBlueprintLockupBoxAspect(blueprint: TitleLockupBlueprint): number {
+  return Number((blueprint.lockupBox.height / Math.max(1, blueprint.lockupBox.width)).toFixed(2));
+}
+
+function verticalOrganizationSummary(blueprints: readonly TitleLockupBlueprint[]): string {
+  return blueprints.map((blueprint) => [
+    blueprint.candidateId,
+    blueprint.compositionMode,
+    blueprint.flowAxis,
+    `flag=${blueprintUsesVerticalOrganization(blueprint)}`,
+    `aspect=${getBlueprintLockupBoxAspect(blueprint)}`,
+    `ySpan=${getBlueprintUnitYSpan(blueprint)}`,
+  ].join(":")).join(" | ");
 }
 
 function toBlueprintOrientationPreference(
@@ -2395,6 +2442,8 @@ function buildBlueprintFromDraftAndPlan(
     semanticSplit,
     lockupBox,
     grammar.flowAxis,
+    planItem.compositionMode,
+    toBlueprintOrientationPreference(spatialStrategy.orientationPreference),
     Math.max(candidateIndex, 0),
   );
   const collisionPolicy = createCollisionPolicy();
@@ -2704,16 +2753,30 @@ function buildTitleUnitsFromLayoutHints(
   semanticSplit: TitleSemanticSplitCandidate,
   lockupBox: TitleLockupBox,
   flowAxis: TitleFlowAxis,
+  compositionMode: TitleCompositionMode,
+  orientationPreference: BlueprintOrientationPreference,
   candidateIndex: number,
 ): TitleLockupUnit[] {
   return semanticSplit.units.map((semanticUnit, index) => {
     const hint = findUnitLayoutHint(unitLayoutHints, index);
-    const ratio = hint?.boxRatio ?? createFallbackBoxRatio(
+    const ratioFlowAxis = getSystemRatioFlowAxis(
       flowAxis,
-      index,
+      compositionMode,
+      orientationPreference,
       semanticSplit.units.length,
-      candidateIndex,
     );
+    const ratio = shouldUseSystemVerticalOrganization(
+      compositionMode,
+      orientationPreference,
+      semanticSplit.units.length,
+    )
+      ? createFallbackBoxRatio(ratioFlowAxis, index, semanticSplit.units.length, candidateIndex)
+      : hint?.boxRatio ?? createFallbackBoxRatio(
+        ratioFlowAxis,
+        index,
+        semanticSplit.units.length,
+        candidateIndex,
+      );
     const width = Math.round(clamp(ratio.width * lockupBox.width, 21, lockupBox.width));
     const height = Math.round(clamp(ratio.height * lockupBox.height, 21, lockupBox.height));
     const x = Math.round(clamp(
@@ -2762,6 +2825,38 @@ function fallbackUnitDirection(
   unitCount: number,
 ): TitleUnitDirection {
   return flowAxis === "vertical" && unitCount === 1 ? "vertical" : "horizontal";
+}
+
+const VERTICAL_ORGANIZATION_COMPOSITION_MODES: readonly TitleCompositionMode[] = [
+  "verticalHeroStack",
+  "staggeredColumn",
+  "centerStageLockup",
+  "badgeHeroLockup",
+];
+
+function shouldUseSystemVerticalOrganization(
+  compositionMode: TitleCompositionMode,
+  orientationPreference: BlueprintOrientationPreference,
+  unitCount: number,
+): boolean {
+  return (
+    orientationPreference === "verticalFirst" &&
+    unitCount > 1 &&
+    VERTICAL_ORGANIZATION_COMPOSITION_MODES.includes(compositionMode)
+  );
+}
+
+function getSystemRatioFlowAxis(
+  flowAxis: TitleFlowAxis,
+  compositionMode: TitleCompositionMode,
+  orientationPreference: BlueprintOrientationPreference,
+  unitCount: number,
+): TitleFlowAxis {
+  if (!shouldUseSystemVerticalOrganization(compositionMode, orientationPreference, unitCount)) {
+    return flowAxis;
+  }
+
+  return flowAxis === "centered" ? "centered" : "vertical";
 }
 
 function getSystemVisualWeightForRole(

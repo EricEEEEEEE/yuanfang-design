@@ -1,12 +1,17 @@
 import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
+import type { TitleLockupBlueprint } from "@/config/title-lockup-blueprint";
 import type { TitleCandidate, TitleCandidateUnit } from "@/services/title-candidate.service";
+import type { SpatialStrategy } from "@/services/spatial-strategy-planner.service";
 
 export type RenderTitleCandidatePreviewInput = {
   backgroundImagePath: string;
   outputDir: string;
   candidates: TitleCandidate[];
+  lockupBlueprints?: TitleLockupBlueprint[];
+  debugOverlay?: boolean;
+  spatialStrategy?: SpatialStrategy;
   outputWidth?: number;
   outputHeight?: number;
 };
@@ -20,6 +25,7 @@ const DEFAULT_WIDTH = 1080;
 const DEFAULT_HEIGHT = 1620;
 const TITLE_BASE_FONT_SIZE = 72;
 const SUBTITLE_BASE_FONT_SIZE = 36;
+type PreviewBox = { x: number; y: number; width: number; height: number };
 
 export async function renderTitleCandidatePreviews(
   input: RenderTitleCandidatePreviewInput,
@@ -38,10 +44,20 @@ export async function renderTitleCandidatePreviews(
   mkdirSync(input.outputDir, { recursive: true });
 
   const previewPaths: string[] = [];
+  const blueprintByCandidateId = new Map(
+    (input.lockupBlueprints ?? []).map((blueprint) => [blueprint.candidateId, blueprint]),
+  );
 
   for (const [index, candidate] of input.candidates.entries()) {
     const outputPath = path.join(input.outputDir, `yuanfang-title-candidate-preview-${index + 1}.jpg`);
-    const svg = buildCandidateSvg(candidate, width, height);
+    const svg = buildCandidateSvg(
+      candidate,
+      width,
+      height,
+      blueprintByCandidateId.get(candidate.candidateId),
+      input.debugOverlay === true,
+      input.spatialStrategy,
+    );
 
     await sharp(input.backgroundImagePath)
       .resize(width, height, { fit: "cover" })
@@ -58,11 +74,21 @@ export async function renderTitleCandidatePreviews(
   return { previewPaths, contactSheetPath };
 }
 
-function buildCandidateSvg(candidate: TitleCandidate, width: number, height: number): string {
+function buildCandidateSvg(
+  candidate: TitleCandidate,
+  width: number,
+  height: number,
+  blueprint: TitleLockupBlueprint | undefined,
+  debugOverlay: boolean,
+  spatialStrategy: SpatialStrategy | undefined,
+): string {
   const unitElements = candidate.titleUnits
     .map((unit) => renderTitleUnit(unit, width, height))
     .join("\n");
   const subtitleElement = renderSubtitle(candidate, width, height);
+  const debugElements = debugOverlay
+    ? renderDebugOverlay(blueprint, spatialStrategy, width, height)
+    : "";
   const meta = `${candidate.patternKeys.join(" + ")} | ${candidate.effectIntent}`;
 
   return `
@@ -96,9 +122,77 @@ function buildCandidateSvg(candidate: TitleCandidate, width: number, height: num
   <rect x="28" y="28" width="460" height="86" rx="18" fill="#004089" opacity="0.76"/>
   <text class="candidate-label" x="52" y="66">${escapeXml(candidate.candidateId)}</text>
   <text class="candidate-meta" x="52" y="96">${escapeXml(meta)}</text>
+  ${debugElements}
   ${unitElements}
   ${subtitleElement}
 </svg>`;
+}
+
+function renderDebugOverlay(
+  blueprint: TitleLockupBlueprint | undefined,
+  spatialStrategy: SpatialStrategy | undefined,
+  width: number,
+  height: number,
+): string {
+  if (!blueprint) {
+    return "";
+  }
+
+  const forbiddenZones = spatialStrategy?.backgroundLayout.forbiddenZones ?? [];
+  const anchorBox = blueprint.spatialContract.anchorBox;
+  const subtitleBox = blueprint.subtitleLockup.subtitleBox;
+
+  return [
+    ...forbiddenZones.map((zone) => renderDebugBox(
+      zone,
+      width,
+      height,
+      "#EF4444",
+      `forbidden:${zone.reasonType}`,
+      "6 6",
+      0.12,
+    )),
+    renderDebugBox(anchorBox, width, height, "#0EA5E9", "spatialAnchor", "12 8", 0.06),
+    renderDebugBox(blueprint.lockupBox, width, height, "#F59E0B", "lockupBox", "", 0.08),
+    ...blueprint.titleUnits.map((unit) => renderDebugBox(
+      unit.unitBox,
+      width,
+      height,
+      unit.visualRole === "hero" ? "#22C55E" : "#A855F7",
+      `unit:${unit.readingOrder}:${unit.text}`,
+      "4 4",
+      0.07,
+      unit.unitBox.rotationDeg,
+    )),
+    subtitleBox
+      ? renderDebugBox(subtitleBox, width, height, "#FB923C", "subtitleBox", "8 5", 0.08, subtitleBox.rotationDeg)
+      : "",
+  ].join("\n");
+}
+
+function renderDebugBox(
+  box: PreviewBox,
+  outputWidth: number,
+  outputHeight: number,
+  color: string,
+  label: string,
+  dashArray: string,
+  fillOpacity: number,
+  rotationDeg = 0,
+): string {
+  const scaledBox = scaleBoxToPreview(box, outputWidth, outputHeight);
+  const labelX = Math.round(scaledBox.x + 8);
+  const labelY = Math.round(scaledBox.y + 22);
+  const centerX = Math.round(scaledBox.x + scaledBox.width / 2);
+  const centerY = Math.round(scaledBox.y + scaledBox.height / 2);
+  const transform = rotationDeg === 0 ? "" : ` transform="rotate(${rotationDeg} ${centerX} ${centerY})"`;
+  const dash = dashArray ? ` stroke-dasharray="${dashArray}"` : "";
+
+  return `
+  <g${transform}>
+    <rect x="${scaledBox.x}" y="${scaledBox.y}" width="${scaledBox.width}" height="${scaledBox.height}" fill="${color}" fill-opacity="${fillOpacity}" stroke="${color}" stroke-width="3"${dash}/>
+    <text x="${labelX}" y="${labelY}" font-family="Menlo, Monaco, Consolas, monospace" font-size="18" font-weight="700" fill="${color}" stroke="#FFFFFF" stroke-width="3" paint-order="stroke fill">${escapeXml(label)}</text>
+  </g>`;
 }
 
 function renderTitleUnit(unit: TitleCandidateUnit, width: number, height: number): string {
@@ -221,6 +315,19 @@ function getRoleStyle(role: TitleCandidateUnit["role"]): {
 
 function normalizeCoordinate(value: number, size: number): number {
   return Math.round((value / 1000) * size);
+}
+
+function scaleBoxToPreview(
+  box: PreviewBox,
+  outputWidth: number,
+  outputHeight: number,
+): PreviewBox {
+  return {
+    x: normalizeCoordinate(box.x, outputWidth),
+    y: normalizeCoordinate(box.y, outputHeight),
+    width: normalizeCoordinate(box.width, outputWidth),
+    height: normalizeCoordinate(box.height, outputHeight),
+  };
 }
 
 function escapeXml(value: string): string {
