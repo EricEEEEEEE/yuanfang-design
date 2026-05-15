@@ -56,7 +56,30 @@ export async function composeFinalPoster(
   const manifest = preparedLayers.map(({ input: _layerInput, ...item }) => item);
   const outputMimeType = input.compositionPolicy.outputMimeType ?? "image/jpeg";
   const jpegQuality = input.compositionPolicy.jpegQuality ?? DEFAULT_JPEG_QUALITY;
-  const outputBuffer = await renderOutput(input, preparedLayers, outputMimeType, jpegQuality);
+  let outputBuffer: Buffer;
+
+  try {
+    outputBuffer = await renderOutput(input, preparedLayers, outputMimeType, jpegQuality);
+  } catch (error) {
+    return {
+      source: "final-composer-v1",
+      layerManifest: manifest,
+      safety: {
+        passed: false,
+        checks: [
+          ...safety,
+          check("output_compose_succeeded", false, "error", "Sharp composition must complete before Final Composer can return artwork."),
+        ],
+      },
+      diagnostics: {
+        layerOrder: manifest.map((item) => item.kind),
+        titleAssetSha256: titleLayer?.sha256,
+        backgroundSha256: input.backgroundAsset.sha256,
+      },
+      warnings: [...buildWarnings(input), errorMessage(error)],
+      reason: "Final Composer failed during Sharp composition.",
+    };
+  }
 
   return {
     source: "final-composer-v1",
@@ -246,10 +269,12 @@ function buildSafetyChecks(input: FinalComposerInput): FinalComposerSafetyCheck[
     check("background_asset_valid", isValidBackground(input.backgroundAsset), "error", "background asset must include a supported image buffer and positive dimensions."),
     check("title_asset_kind_raster_layer", input.titleAsset.assetKind === "titleRasterLayer", "error", "Final Composer only accepts TitleAsset.assetKind=titleRasterLayer."),
     check("title_asset_output_target_raster_layer", input.titleAsset.outputTarget === "rasterLayer", "error", "Final Composer only accepts TitleAsset.outputTarget=rasterLayer."),
+    check("title_asset_render_mode_production", input.titleAsset.renderMode === "production", "error", "Final Composer only accepts production TitleAsset renderMode."),
     check("title_asset_safety_passed", input.titleAsset.safety.passed === true, "error", "Final Composer requires the upstream title asset safety gate to pass."),
     check("title_raster_layer_exists", Boolean(titleLayer), "error", "TitleAsset.rasterLayer is required for production composition."),
     check("title_raster_layer_png", titleLayer?.mimeType === "image/png", "error", "TitleAsset.rasterLayer must be a transparent PNG layer."),
     check("title_raster_layer_buffer_valid", Buffer.isBuffer(titleLayer?.input) && (titleLayer?.input.byteLength ?? 0) > 0, "error", "TitleAsset.rasterLayer.input must be a non-empty Buffer."),
+    check("title_raster_layer_byte_length_valid", Number.isInteger(titleLayer?.byteLength) && (titleLayer?.byteLength ?? 0) > 0, "error", "TitleAsset.rasterLayer.byteLength metadata must be positive."),
     check("title_asset_canvas_matches", input.titleAsset.canvas.width === input.canvas.width && input.titleAsset.canvas.height === input.canvas.height, "error", "TitleAsset canvas must match Final Composer canvas."),
     check("title_asset_bounds_respected", Boolean(titleLayer && layerInsideCanvas(titleLayer, input.canvas)), "error", "TitleAsset.rasterLayer bounds must stay inside the Final Composer canvas."),
     check("debug_svg_not_used", input.titleAsset.assetKind !== "debugSvg", "error", "debugSvg is diagnostic only and cannot be used as production artwork."),
@@ -346,6 +371,12 @@ function isPositiveInteger(value: unknown): value is number {
 
 function isValidQuality(value: number): boolean {
   return Number.isInteger(value) && value >= 1 && value <= 100;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error
+    ? `Sharp composition failed: ${error.message}`
+    : "Sharp composition failed with an unknown error.";
 }
 
 function sha256(input: Buffer): string {

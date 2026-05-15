@@ -33,25 +33,72 @@ async function main(): Promise<void> {
     ...input,
     titleAsset: { ...titleAsset, safety: { passed: false, checks: [] } },
   });
-  assert(!failedSafety.safety.passed && !failedSafety.output, "FINAL_COMPOSER_REJECTS_FAILED_TITLE_SAFETY");
+  assertRejected(failedSafety, "title_asset_safety_passed", "FINAL_COMPOSER_REJECTS_FAILED_TITLE_SAFETY");
+
+  const nonProductionAsset = await composeFinalPoster({
+    ...input,
+    titleAsset: { ...titleAsset, renderMode: "debug" },
+  });
+  assertRejected(nonProductionAsset, "title_asset_render_mode_production", "FINAL_COMPOSER_REJECTS_NON_PRODUCTION_RENDER_MODE");
+
+  const wrongOutputTargetAsset = await composeFinalPoster({
+    ...input,
+    titleAsset: { ...titleAsset, outputTarget: "debugSvg" },
+  });
+  assertRejected(wrongOutputTargetAsset, "title_asset_output_target_raster_layer", "FINAL_COMPOSER_REJECTS_WRONG_OUTPUT_TARGET");
 
   const measurementSvgAsset = await composeFinalPoster({
     ...input,
     titleAsset: { ...titleAsset, assetKind: "measurementSvg", rasterLayer: undefined },
   });
-  assert(!measurementSvgAsset.safety.passed && !measurementSvgAsset.output, "FINAL_COMPOSER_REJECTS_MEASUREMENT_SVG");
+  assertRejected(measurementSvgAsset, "measurement_svg_not_used", "FINAL_COMPOSER_REJECTS_MEASUREMENT_SVG");
 
   const debugSvgAsset = await composeFinalPoster({
     ...input,
     titleAsset: { ...titleAsset, assetKind: "debugSvg", rasterLayer: undefined },
   });
-  assert(!debugSvgAsset.safety.passed && !debugSvgAsset.output, "FINAL_COMPOSER_REJECTS_DEBUG_SVG");
+  assertRejected(debugSvgAsset, "debug_svg_not_used", "FINAL_COMPOSER_REJECTS_DEBUG_SVG");
+
+  const missingRasterLayer = await composeFinalPoster({
+    ...input,
+    titleAsset: { ...titleAsset, rasterLayer: undefined },
+  });
+  assertRejected(missingRasterLayer, "title_raster_layer_exists", "FINAL_COMPOSER_REJECTS_MISSING_RASTER_LAYER");
+
+  const zeroRasterLayerByteLength = await composeFinalPoster({
+    ...input,
+    titleAsset: {
+      ...titleAsset,
+      rasterLayer: { ...titleAsset.rasterLayer!, byteLength: 0 },
+    },
+  });
+  assertRejected(zeroRasterLayerByteLength, "title_raster_layer_byte_length_valid", "FINAL_COMPOSER_REJECTS_ZERO_RASTER_LAYER_BYTE_LENGTH");
 
   const canvasMismatch = await composeFinalPoster({
     ...input,
     titleAsset: { ...titleAsset, canvas: { width: 720, height: 1080 } },
   });
-  assert(!canvasMismatch.safety.passed && !canvasMismatch.output, "FINAL_COMPOSER_REJECTS_CANVAS_MISMATCH");
+  assertRejected(canvasMismatch, "title_asset_canvas_matches", "FINAL_COMPOSER_REJECTS_CANVAS_MISMATCH");
+
+  const minimalOptionalLayers = await composeFinalPoster({
+    ...input,
+    brandAssets: undefined,
+    campusInfoAsset: { enabled: false },
+  });
+  assert(minimalOptionalLayers.safety.passed, "FINAL_COMPOSER_OPTIONAL_LAYERS_CAN_BE_OMITTED");
+  assert(minimalOptionalLayers.diagnostics.layerOrder.join(">") === "background>titleAsset", "FINAL_COMPOSER_OPTIONAL_LAYERS_OMITTED");
+
+  const composeFailure = await composeFinalPoster({
+    ...input,
+    backgroundAsset: {
+      source: "debugFixture",
+      input: Buffer.from("not-an-image"),
+      width: CANVAS.width,
+      height: CANVAS.height,
+      mimeType: "image/png",
+    },
+  });
+  assertRejected(composeFailure, "output_compose_succeeded", "FINAL_COMPOSER_FAILS_CLOSED_ON_COMPOSE_ERROR");
 
   console.log("FINAL_COMPOSER_V1_PASS", {
     outputPath: OUTPUT_PATH,
@@ -208,6 +255,18 @@ function assert(condition: unknown, code: string): asserts condition {
   if (!condition) {
     throw new Error(code);
   }
+}
+
+function assertRejected(
+  result: Awaited<ReturnType<typeof composeFinalPoster>>,
+  safetyCode: string,
+  errorCode: string,
+): void {
+  assert(!result.safety.passed && !result.output, errorCode);
+  assert(
+    result.safety.checks.some((check) => check.code === safetyCode && !check.passed),
+    `${errorCode}_${safetyCode}`,
+  );
 }
 
 function sha256(input: Buffer): string {
