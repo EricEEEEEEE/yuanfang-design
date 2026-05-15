@@ -2,13 +2,12 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { resolveTitleFontForRole } from "@/config/title-font-registry";
 import type { TitleBox, TitleLockupBox, TitleUnitBox } from "@/config/title-lockup-blueprint";
-import type { TitleFontResolveResult, VectorGlyphFontEmbedMode, VectorGlyphMeasurementRequirement, VectorGlyphOutputTarget, VectorGlyphRenderInput, VectorGlyphRenderResult, VectorGlyphRun, VectorGlyphSafetyCheck, VectorGlyphSizeBudget, VectorGlyphSizeBudgetResult, VectorGlyphWarning, VectorTitleLayer, VectorTitleRole } from "@/models/title-vector-glyph-renderer";
+import { createRasterMeasurementIdentity, rasterMeasurementIdentityMatches, type TitleFontResolveResult, type VectorGlyphFontEmbedMode, type VectorGlyphMeasuredBoxes, type VectorGlyphMeasurementRequirement, type VectorGlyphOutputTarget, type VectorGlyphRenderInput, type VectorGlyphRenderResult, type VectorGlyphRun, type VectorGlyphSafetyCheck, type VectorGlyphSizeBudget, type VectorGlyphSizeBudgetResult, type VectorGlyphWarning, type VectorTitleLayer, type VectorTitleRole } from "@/models/title-vector-glyph-renderer";
 type RunStyle = { fill: string; strokeWidth: number; letterSpacing: number; lineHeightFactor: number; widthFactor: number };
 type RenderStrategy = { outputTarget: VectorGlyphOutputTarget; fontEmbedMode: VectorGlyphFontEmbedMode; sizeBudget: VectorGlyphSizeBudget; measurementRequirement: VectorGlyphMeasurementRequirement };
 type FontFaceAsset = { fontKey: string; family: string; css: string; filePath: string; loaded: boolean; cacheKey: string; warning?: string };
-type FitResult = { fontSize: number; measured: TitleBox; fits: boolean };
-const fontFaceCache = new Map<string, FontFaceAsset>();
-const DEFAULT_SIZE_BUDGET: VectorGlyphSizeBudget = { debugSvgWarningBytes: 5_000_000, standaloneSvgWarningBytes: 2_000_000, productionHardLimitBytes: 1_000_000, measurementSvgTargetBytes: 250_000 };
+type FitResult = { fontSize: number; measured: TitleBox; fits: boolean }; type RasterGate = { passed: boolean; identityMatches: boolean; accepted: boolean };
+const fontFaceCache = new Map<string, FontFaceAsset>(); const DEFAULT_SIZE_BUDGET: VectorGlyphSizeBudget = { debugSvgWarningBytes: 5_000_000, standaloneSvgWarningBytes: 2_000_000, productionHardLimitBytes: 1_000_000, measurementSvgTargetBytes: 250_000 };
 export function renderTitleVectorGlyph(input: VectorGlyphRenderInput): VectorGlyphRenderResult {
   const strategy = resolveRenderStrategy(input);
   const bp = input.blueprint;
@@ -22,15 +21,15 @@ export function renderTitleVectorGlyph(input: VectorGlyphRenderInput): VectorGly
   const glyphRuns = subtitleRun ? [...mainRuns, subtitleRun] : mainRuns;
   const layers = createLayers(glyphRuns, strategy.outputTarget === "debugSvg" && input.renderMode === "debug");
   const estimatedBoxes = { lockupBox: box(bp.lockupBox), unitBoxes: mainRuns.map((run) => ({ text: run.text, planned: run.plannedBox, measured: run.measuredBox })), ...(subtitleRun ? { subtitleBox: { text: subtitleRun.text, planned: subtitleRun.plannedBox, measured: subtitleRun.measuredBox } } : {}) };
-  const rasterOk = acceptsRasterMeasurement(input);
-  const measuredBoxes = rasterOk ? input.rasterMeasurementResult!.measuredBoxes : estimatedBoxes;
+  const rasterGate = createRasterGate(input, strategy, glyphRuns);
+  const measuredBoxes = rasterGate.accepted ? input.rasterMeasurementResult!.measuredBoxes : estimatedBoxes;
   const svg = renderRealSvg(input, strategy, glyphRuns, fontAssets);
   const sizeBudget = evaluateSizeBudget(svg.length, input.renderMode, strategy);
-  warnings.push(...strategyWarnings(input, strategy, sizeBudget, rasterOk));
-  const checks = createSafetyChecks(input, strategy, sizeBudget, titleJoin, mainRuns, glyphRuns, rasterOk);
+  warnings.push(...strategyWarnings(input, strategy, sizeBudget, rasterGate.accepted));
+  const checks = createSafetyChecks(input, strategy, sizeBudget, titleJoin, mainRuns, glyphRuns, measuredBoxes, rasterGate);
   const safety = { passed: checks.every((check) => check.passed || check.severity !== "error"), checks };
   const fontCacheKeyPreview = Array.from(new Set(fontAssets.map((asset) => asset.cacheKey)));
-  return { source: "vector-glyph-renderer-v1", candidateId: bp.candidateId, sourceCandidateId: sourceCandidateId(input), outputTarget: strategy.outputTarget, fontEmbedMode: strategy.fontEmbedMode, measurementRequirement: strategy.measurementRequirement, sizeBudget, fontCacheKeyPreview, svg, sharpLayer: input.outputFormat === "sharpLayer" || strategy.outputTarget === "rasterLayer" ? { input: Buffer.from(svg), top: 0, left: 0 } : undefined, layers, measuredBoxes, glyphRuns, safety, warnings, reason: resultReason(strategy, rasterOk) };
+  return { source: "vector-glyph-renderer-v1", candidateId: bp.candidateId, sourceCandidateId: sourceCandidateId(input), outputTarget: strategy.outputTarget, fontEmbedMode: strategy.fontEmbedMode, measurementRequirement: strategy.measurementRequirement, sizeBudget, fontCacheKeyPreview, svg, sharpLayer: input.outputFormat === "sharpLayer" || strategy.outputTarget === "rasterLayer" ? { input: Buffer.from(svg), top: 0, left: 0 } : undefined, layers, measuredBoxes, glyphRuns, safety, warnings, reason: resultReason(strategy, rasterGate.accepted) };
 }
 function createRun(input: VectorGlyphRenderInput, strategy: RenderStrategy, charset: string, text: string, role: VectorTitleRole, plannedBox: TitleUnitBox, visualWeight: number, allowEmphasis: boolean, alignment: string, runId: string, warnings: VectorGlyphWarning[], fontAssets: FontFaceAsset[], direction?: string): VectorGlyphRun {
   const font = resolveTitleFontForRole(role, { registry: input.fontRegistry, fallback: input.fontFallback });
@@ -49,12 +48,13 @@ function createSubtitleRun(input: VectorGlyphRenderInput, strategy: RenderStrate
   if (!subtitleBox || input.blueprint.subtitleLockup.placementPolicy === "hidden") return null;
   return createRun(input, strategy, charset, input.blueprint.subtitleLockup.text, "subtitle", subtitleBox, input.blueprint.subtitleLockup.visualWeight, false, "center", `${input.blueprint.candidateId}-subtitle`, warnings, fontAssets);
 }
-function createSafetyChecks(input: VectorGlyphRenderInput, strategy: RenderStrategy, sizeBudget: VectorGlyphSizeBudgetResult, titleJoin: string, mainRuns: readonly VectorGlyphRun[], glyphRuns: readonly VectorGlyphRun[], rasterOk: boolean): VectorGlyphSafetyCheck[] {
+function createSafetyChecks(input: VectorGlyphRenderInput, strategy: RenderStrategy, sizeBudget: VectorGlyphSizeBudgetResult, titleJoin: string, mainRuns: readonly VectorGlyphRun[], glyphRuns: readonly VectorGlyphRun[], measuredBoxes: VectorGlyphMeasuredBoxes, rasterGate: RasterGate): VectorGlyphSafetyCheck[] {
   const bp = input.blueprint, mainRunsJoin = mainRuns.map((run) => run.text).join(""), zones = input.safetyContext?.forbiddenZones ?? [];
-  const forbiddenOverlap = zones.some((zone) => glyphRuns.some((run) => run.measuredBox && overlaps(run.measuredBox, zone))), subtitleRun = glyphRuns.find((run) => run.role === "subtitle");
-  const subtitleOverlap = subtitleRun?.measuredBox ? mainRuns.some((run) => run.measuredBox && overlaps(run.measuredBox, subtitleRun.measuredBox!)) : false, measuredInside = glyphRuns.every((run) => run.measuredBox && inside(run.measuredBox, run.plannedBox));
+  const mainBoxes = measuredBoxes.unitBoxes.map((item) => item.measured).filter(Boolean) as TitleBox[], subtitleBox = measuredBoxes.subtitleBox?.measured;
+  const activeBoxes = [...mainBoxes, ...(subtitleBox ? [subtitleBox] : [])], forbiddenOverlap = zones.some((zone) => activeBoxes.some((item) => overlaps(item, zone)));
+  const subtitleOverlap = Boolean(subtitleBox && mainBoxes.some((item) => overlaps(item, subtitleBox))), measuredInside = measuredBoxes.unitBoxes.every((item) => item.measured && inside(item.measured, item.planned)) && (!measuredBoxes.subtitleBox || Boolean(measuredBoxes.subtitleBox.measured && inside(measuredBoxes.subtitleBox.measured, measuredBoxes.subtitleBox.planned)));
   const fontSeverity = input.renderMode === "production" ? "error" : "warning", zoneSeverity = input.renderMode === "production" ? "error" : "warning";
-  const productionFullEmbedBlocked = input.renderMode === "production" && strategy.fontEmbedMode === "full", rasterMeasurementRequired = input.renderMode === "production" || strategy.measurementRequirement === "rasterRequiredForProduction", fontEmbedOk = strategy.fontEmbedMode === "full" ? glyphRuns.every((run) => run.fontEmbedded) : true;
+  const productionFullEmbedBlocked = input.renderMode === "production" && strategy.fontEmbedMode === "full", rasterMeasurementRequired = input.renderMode === "production" || strategy.measurementRequirement === "rasterRequiredForProduction", fontEmbedOk = strategy.fontEmbedMode === "full" ? glyphRuns.every((run) => run.fontEmbedded) : true, rasterSeverity = input.renderMode === "production" ? "error" : "warning";
   return [
     check("title_join_matches_main_title", titleJoin === bp.mainTitle, "error", "titleUnits sorted by readingOrder must join mainTitle."),
     check("glyph_runs_join_matches_main_title", mainRunsJoin === bp.mainTitle, "error", "main glyphRuns must join mainTitle."),
@@ -66,7 +66,9 @@ function createSafetyChecks(input: VectorGlyphRenderInput, strategy: RenderStrat
     check("font_resolved", glyphRuns.every((run) => run.font.status !== "missing" && run.font.status !== "unavailable"), "error", "all glyph runs must resolve a font or configured fallback."),
     check("font_embedded", fontEmbedOk, fontSeverity, "full font embed mode requires local @font-face; non-full modes intentionally omit full CJK font CSS."),
     check("production_full_font_embed_blocked", !productionFullEmbedBlocked, "error", "production cannot emit SVG with full CJK font embedded."),
-    check("raster_measurement_required_for_production", !rasterMeasurementRequired || rasterOk, "error", rasterOk ? "external Sharp raster measurement result passed." : "production requires Sharp raster measurement."),
+    check("raster_measurement_passed", !rasterMeasurementRequired || rasterGate.passed, rasterSeverity, !rasterMeasurementRequired ? "raster measurement is not required for this render mode." : rasterGate.passed ? "external Sharp raster measurement safety passed." : "production requires a passing Sharp raster measurement result."),
+    check("raster_measurement_identity_matches", !rasterMeasurementRequired || rasterGate.identityMatches, rasterSeverity, !rasterMeasurementRequired ? "raster measurement identity is not required for this render mode." : rasterGate.identityMatches ? "raster measurement identity matches current measurement SVG and glyph runs." : "raster measurement identity does not match current measurement SVG and glyph runs."),
+    check("raster_measurement_required_for_production", !rasterMeasurementRequired || rasterGate.accepted, "error", rasterGate.accepted ? "external Sharp raster measurement result passed and matched identity." : "production requires matching Sharp raster measurement."),
     check("svg_size_budget", sizeBudget.status !== "blocked", sizeBudget.status === "blocked" ? "error" : "warning", sizeBudget.reason),
     check("measurement_svg_not_final_asset", strategy.outputTarget !== "measurementSvg", "warning", "measurementSvg is an internal measurement target and must not be delivered as final artwork."),
     check("forbidden_zone_overlap", !forbiddenOverlap, zoneSeverity, "forbiddenZones are checked only for overlap; renderer does not relayout."),
@@ -136,7 +138,6 @@ function createLayers(runs: readonly VectorGlyphRun[], debug: boolean): VectorTi
   const layers = runs.map((run, index) => ({ layerId: run.runId, kind: run.role === "subtitle" ? "subtitle" as const : "glyphRun" as const, role: run.role, text: run.text, plannedBox: run.plannedBox, zIndex: index + 1, opacity: 1, reason: "real SVG font run with estimated measured box." }));
   return debug ? [...layers, { layerId: "debug-overlay", kind: "debug", zIndex: 999, opacity: 0.88, reason: "debug overlay for planned and estimated boxes." }] : layers;
 }
-
 function baseWarnings(input: VectorGlyphRenderInput, strategy: RenderStrategy): VectorGlyphWarning[] {
   const warnings = [warning("estimated_measurement_only", "renderer estimated boxes remain available; Sharp raster measurement is supplied externally.", "measuredBoxes"), warning("glyph_path_not_implemented", "glyph path conversion is intentionally not implemented in Real SVG v1.", "glyphRuns"), warning("shadow_glow_bleed_warning", "shadow/glow bleed is warning-only unless raster measurement proves overflow.", "svg")];
   if (strategy.outputTarget === "measurementSvg") warnings.push(warning("measurement_svg_not_final_asset", "measurementSvg is for Sharp measurement only and is not a final deliverable asset.", "outputTarget"));
@@ -146,13 +147,11 @@ function baseWarnings(input: VectorGlyphRenderInput, strategy: RenderStrategy): 
   if (input.blueprint.isFallbackCandidate) warnings.push(warning("fallback_candidate", "fallback candidate is diagnostic only and cannot pass production safety.", input.blueprint.candidateId));
   return warnings;
 }
-
 function resolveRenderStrategy(input: VectorGlyphRenderInput): RenderStrategy {
   const outputTarget = input.outputTarget ?? (input.outputFormat === "sharpLayer" ? "rasterLayer" : input.renderMode === "production" ? "rasterLayer" : "debugSvg");
   const fontEmbedMode = input.fontEmbedMode ?? (outputTarget === "debugSvg" || outputTarget === "standaloneSvg" ? "full" : "none");
   return { outputTarget, fontEmbedMode, sizeBudget: { ...DEFAULT_SIZE_BUDGET, ...input.sizeBudget }, measurementRequirement: input.measurementRequirement ?? (input.renderMode === "production" ? "rasterRequiredForProduction" : "estimatedOnly") };
 }
-
 function evaluateSizeBudget(svgLengthBytes: number, renderMode: string, strategy: RenderStrategy): VectorGlyphSizeBudgetResult {
   const blocked = renderMode === "production" && svgLengthBytes > strategy.sizeBudget.productionHardLimitBytes;
   const limit = blocked ? strategy.sizeBudget.productionHardLimitBytes : targetLimit(strategy);
@@ -161,7 +160,6 @@ function evaluateSizeBudget(svgLengthBytes: number, renderMode: string, strategy
   const label = status === "blocked" ? "production SVG exceeds hard limit" : status === "warning" ? `${strategy.outputTarget} exceeds strategy threshold` : "SVG size is within the configured strategy budget";
   return { svgLengthBytes, status, limitBytes: limit, target: strategy.outputTarget, reason: `${label} ${limit} bytes.` };
 }
-
 function strategyWarnings(input: VectorGlyphRenderInput, strategy: RenderStrategy, sizeBudget: VectorGlyphSizeBudgetResult, rasterOk: boolean): VectorGlyphWarning[] {
   return [
     ...(strategy.fontEmbedMode === "full" && sizeBudget.status !== "ok" ? [warning("full_font_svg_heavy", sizeBudget.reason, "svg")] : []),
@@ -170,16 +168,14 @@ function strategyWarnings(input: VectorGlyphRenderInput, strategy: RenderStrateg
     ...(strategy.outputTarget === "measurementSvg" ? [warning("measurement_svg_estimated_only", "measurementSvg carries estimated renderer boxes until external Sharp measurement replaces them.", "outputTarget")] : []),
   ];
 }
-
 function resultReason(strategy: RenderStrategy, rasterOk: boolean): string { return rasterOk ? "real SVG font render v1 with accepted external Sharp raster measurement." : strategy.outputTarget === "measurementSvg" ? "real SVG font render v1 measurementSvg strategy; renderer measurement remains estimated." : strategy.outputTarget === "rasterLayer" ? "real SVG font render v1 rasterLayer strategy; Final Composer should consume a raster layer later, but this stage still returns SVG buffer only." : "real SVG font render v1; measurement is deterministic estimate only."; }
 function targetLimit(strategy: RenderStrategy): number { return strategy.outputTarget === "measurementSvg" ? strategy.sizeBudget.measurementSvgTargetBytes : strategy.outputTarget === "standaloneSvg" ? strategy.sizeBudget.standaloneSvgWarningBytes : strategy.outputTarget === "debugSvg" ? strategy.sizeBudget.debugSvgWarningBytes : strategy.sizeBudget.productionHardLimitBytes; }
 function collectCharset(values: readonly string[]): string { return Array.from(new Set(values.join(""))).sort().join(""); }
 function fontCacheKey(fontKey: string, charset: string, filePath: string, mtimeMs: number, embedMode: VectorGlyphFontEmbedMode): string { return `fontKey=${fontKey};charset=${charset};filePath=${filePath};mtime=${mtimeMs};embedMode=${embedMode}`; }
-
 function cacheFont(key: string, asset: FontFaceAsset): FontFaceAsset { fontFaceCache.set(key, asset); return asset; }
 function check(code: string, passed: boolean, severity: "error" | "warning", reason: string): VectorGlyphSafetyCheck { return { checkId: code, code, passed, severity, reason }; }
 function warning(code: string, message: string, target: string): VectorGlyphWarning { return { code, severity: "warning", message, target }; }
-function widthFactor(fontKey: string | null): number { return fontKey?.includes("Serif") || fontKey?.includes("Wenkai") ? 1 : fontKey?.includes("Marker") || fontKey?.includes("Rounded") ? 0.98 : 0.95; }
+function widthFactor(fontKey: string | null): number { return fontKey?.includes("Marker") || fontKey?.includes("Rounded") ? 1.04 : 1.06; }
 function placeMeasured(planned: TitleUnitBox, measured: TitleBox, alignment: string): TitleBox {
   const x = alignment === "left" ? planned.x : alignment === "right" ? planned.x + planned.width - measured.width : planned.x + (planned.width - measured.width) / 2;
   return { x: round(x), y: round(planned.y + (planned.height - measured.height) / 2), width: measured.width, height: measured.height };
@@ -190,7 +186,11 @@ function sameLockupBox(left: TitleLockupBox, right: TitleLockupBox): boolean { r
 function box(value: TitleBox): TitleBox { return { x: value.x, y: value.y, width: value.width, height: value.height }; }
 function rect(value: TitleBox, stroke: string, dash: string): string { return `<rect class="debug-box" x="${value.x}" y="${value.y}" width="${value.width}" height="${value.height}" stroke="${stroke}"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`; }
 function sourceCandidateId(input: VectorGlyphRenderInput): string | undefined { return input.blueprint.candidateId.includes("-r") ? input.blueprint.candidateId.split("-r")[0] : undefined; }
-function acceptsRasterMeasurement(input: VectorGlyphRenderInput): boolean { return Boolean(input.rasterMeasurementResult?.safety.passed && input.rasterMeasurementResult.candidateId === input.blueprint.candidateId); }
+function createRasterGate(input: VectorGlyphRenderInput, strategy: RenderStrategy, glyphRuns: readonly VectorGlyphRun[]): RasterGate {
+  const result = input.rasterMeasurementResult; if (!result) return { passed: false, identityMatches: false, accepted: false };
+  const identityMatches = rasterMeasurementIdentityMatches(result.identity, createRasterMeasurementIdentity({ candidateId: input.blueprint.candidateId, canvas: input.canvas, outputTarget: "measurementSvg", fontEmbedMode: "none", measurementSvg: renderRealSvg(input, { ...strategy, outputTarget: "measurementSvg", fontEmbedMode: "none" }, glyphRuns, []), glyphRuns: [...glyphRuns], alphaThreshold: result.alphaThreshold }));
+  return { passed: result.safety.passed, identityMatches, accepted: result.safety.passed && identityMatches };
+}
 function fontMime(filePath: string): string { return filePath.endsWith(".woff2") ? "font/woff2" : filePath.endsWith(".woff") ? "font/woff" : filePath.endsWith(".otf") ? "font/otf" : "font/ttf"; }
 function fontFormat(filePath: string): string { return filePath.endsWith(".woff2") ? "woff2" : filePath.endsWith(".woff") ? "woff" : filePath.endsWith(".otf") ? "opentype" : "truetype"; }
 function escapeCss(value: string): string { return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"'); }

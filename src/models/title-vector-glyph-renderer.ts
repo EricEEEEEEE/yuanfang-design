@@ -10,6 +10,7 @@ import type { RasterMeasurementResult } from "@/models/title-raster-measurement"
 import type { ForbiddenZone } from "@/services/background-layout-intelligence.service";
 
 export type { StandardFontKey, StandardTitleArtStyleKey };
+export { createRasterMeasurementIdentity, rasterMeasurementIdentityMatches } from "@/models/title-raster-measurement";
 
 export type VectorGlyphRenderSource = "pipelineFinalPool" | "debug" | "manual";
 export type VectorGlyphRenderMode = "debug" | "production";
