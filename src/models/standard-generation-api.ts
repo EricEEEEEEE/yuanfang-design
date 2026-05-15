@@ -24,6 +24,45 @@ export type StandardGenerateV1Request = {
   };
 };
 
+export type StandardApiBoxSummary = { x: number; y: number; width: number; height: number };
+export type StandardApiSpatialDiagnosticSummary = {
+  backgroundLayoutSource?: string;
+  backgroundLayoutReason?: string;
+  backgroundLayoutFallbackReasonCode?: string;
+  backgroundLayoutFallbackReason?: string;
+  normalizationWarnings?: string[];
+  spatialStrategySource?: string;
+  spatialStrategyReason?: string;
+  spatialFallbackReasonCode?: string;
+  spatialFallbackReason?: string;
+  primaryTextAnchorId?: string;
+  negativeSpaceShape?: string;
+  dominantFlow?: string;
+  recommendedTitleFlow?: string;
+  safeZones?: Array<StandardApiBoxSummary & { id: string; shape?: string; complexity?: string; confidence?: number }>;
+  forbiddenZones?: Array<StandardApiBoxSummary & { id: string; reasonType?: string }>;
+  textAnchors?: Array<StandardApiBoxSummary & { id: string; safeZoneId?: string; preferredOrientation?: string; priority?: number; confidence?: number }>;
+};
+export type StandardApiForbiddenOverlapSummary = {
+  zoneId: string;
+  target: "lockupBox" | "unitBox" | "subtitleBox";
+  text?: string;
+  overlapArea: number;
+  overlapRatio: number;
+};
+export type StandardApiCandidateDiagnosticSummary = {
+  candidateId: string;
+  sourceCandidateId?: string;
+  isFallbackCandidate?: boolean;
+  recommendedAction?: string;
+  shouldReject?: boolean;
+  rejectionReasonCode?: string;
+  lockupBox?: StandardApiBoxSummary;
+  unitBoxes?: Array<StandardApiBoxSummary & { text: string; rotationDeg?: number }>;
+  subtitleBox?: StandardApiBoxSummary | null;
+  forbiddenOverlapSummary?: StandardApiForbiddenOverlapSummary[];
+};
+
 export type StandardGenerateV1Response = {
   ok: boolean;
   source: "standard-generation-api-v1";
@@ -40,6 +79,12 @@ export type StandardGenerateV1Response = {
     candidateSource?: string;
     spatialSource?: string;
     pipelineSource?: string;
+    finalCandidatePoolIds?: string[];
+    recommendedCandidateIds?: string[];
+    rejectedCandidateIds?: string[];
+    rejectionReasonCodes?: string[];
+    spatialDiagnostic?: StandardApiSpatialDiagnosticSummary;
+    candidateDiagnostics?: StandardApiCandidateDiagnosticSummary[];
     selectedCandidateId?: string;
     selectedSourceCandidateId?: string;
     layerOrder?: string[];

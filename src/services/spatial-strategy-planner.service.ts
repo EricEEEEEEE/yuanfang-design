@@ -1,6 +1,8 @@
 import {
   analyzeBackgroundLayout,
   type BackgroundLayoutAnalysisResult,
+  type ForbiddenZone,
+  type SpatialBox,
   type TextAnchor,
 } from "@/services/background-layout-intelligence.service";
 import {
@@ -171,7 +173,9 @@ function getOrientationPreference(layout: BackgroundLayoutAnalysisResult): Title
 }
 
 function selectPrimaryTextAnchor(layout: BackgroundLayoutAnalysisResult): TextAnchor {
-  return sortedTextAnchors(layout.textAnchors)[0] || FALLBACK_ANCHOR;
+  return sortedTextAnchors(layout.textAnchors).find((anchor) => isConflictFreeAnchor(anchor, layout)) ||
+    sortedTextAnchors(layout.textAnchors)[0] ||
+    FALLBACK_ANCHOR;
 }
 
 function selectSecondaryTextAnchors(
@@ -180,6 +184,7 @@ function selectSecondaryTextAnchors(
 ): string[] {
   return sortedTextAnchors(layout.textAnchors)
     .filter((anchor) => anchor.id !== primaryId)
+    .filter((anchor) => isConflictFreeAnchor(anchor, layout))
     .slice(0, 3)
     .map((anchor) => anchor.id);
 }
@@ -282,6 +287,7 @@ function buildCandidateGuidance(
 ): string[] {
   const guidance = [
     `使用 ${primaryTextAnchorId} 作为主要标题空间锚点。`,
+    "该 primary text anchor 必须按 background layout boundary contract 避开 forbiddenZones。",
     "所有候选必须绑定 spatialAnchorId 或 textAnchor id。",
     `标题方向必须服从 orientationPreference: ${orientationPreference}。`,
     "reference patterns 是设计语法，不是模板。",
@@ -319,7 +325,9 @@ function buildCandidateGuidance(
 function buildForbiddenGuidance(): string[] {
   return [
     "不允许压 forbiddenZones。",
+    "不允许 lockupBox / unitBox / subtitleBox 进入 forbiddenZones。",
     "不允许覆盖 Logo / 主体 / 高复杂度细节。",
+    "如果 primary anchor 与禁区冲突，必须使用空间策略提供的 secondary anchor，不要自行压住主体。",
     "不允许只根据 designFamily 决定横排竖排。",
     "不允许候选与 negativeSpaceShape 脱节。",
     "不允许 fallback candidates 用于正式产品输出。",
@@ -343,6 +351,37 @@ function sortedTextAnchors(textAnchors: TextAnchor[]): TextAnchor[] {
 
     return right.confidence - left.confidence;
   });
+}
+
+function isConflictFreeAnchor(anchor: TextAnchor, layout: BackgroundLayoutAnalysisResult): boolean {
+  return isInsideSafeZone(anchor, layout) &&
+    maxForbiddenOverlapRatio(anchor, layout.forbiddenZones) <= 0.01;
+}
+
+function isInsideSafeZone(anchor: TextAnchor, layout: BackgroundLayoutAnalysisResult): boolean {
+  const safeZone = layout.safeZones.find((zone) => zone.id === anchor.safeZoneId);
+  return Boolean(safeZone && inside(anchor, safeZone));
+}
+
+function maxForbiddenOverlapRatio(anchor: TextAnchor, forbiddenZones: readonly ForbiddenZone[]): number {
+  return Math.max(0, ...forbiddenZones.map((zone) => overlapRatio(anchor, zone)));
+}
+
+function inside(inner: SpatialBox, outer: SpatialBox): boolean {
+  return inner.x >= outer.x &&
+    inner.y >= outer.y &&
+    inner.x + inner.width <= outer.x + outer.width &&
+    inner.y + inner.height <= outer.y + outer.height;
+}
+
+function overlapRatio(target: SpatialBox, zone: SpatialBox): number {
+  const width = Math.max(0, Math.min(target.x + target.width, zone.x + zone.width) - Math.max(target.x, zone.x));
+  const height = Math.max(0, Math.min(target.y + target.height, zone.y + zone.height) - Math.max(target.y, zone.y));
+  return width * height / Math.max(1, Math.min(area(target), area(zone)));
+}
+
+function area(box: SpatialBox): number {
+  return Math.max(0, box.width) * Math.max(0, box.height);
 }
 
 function knownPatterns(keys: TitleReferencePatternKey[]): TitleReferencePatternKey[] {

@@ -1,21 +1,26 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { BRAND } from "@/config/brand";
-import type { FinalBackgroundAsset, FinalBrandLayerAsset } from "@/models/final-composer";
+import type { FinalBrandLayerAsset } from "@/models/final-composer";
 import type {
   StandardGenerateV1ErrorCode,
   StandardGenerateV1Request,
   StandardGenerateV1Response,
 } from "@/models/standard-generation-api";
 import { generateStandardPoster } from "@/use-cases/generate-standard-poster.use-case";
+import { buildDiagnostics } from "./diagnostics";
+import { createDebugBackgroundAsset } from "./fixtures";
 
 export const runtime = "nodejs";
 
 const DEFAULT_CANVAS = { width: 1080, height: 1620 };
 const MIN_CANVAS = 512;
 const MAX_CANVAS = 4096;
+const DEFAULT_KEYWORDS = ["作品墙", "展示台", "舞台光", "奖章", "表达力", "课程成果"];
+const DEFAULT_SUBTITLE = "看见孩子的表达力量";
+const DEFAULT_CONTEXT = { sceneKey: "achievementShowcase", designFamily: "achievementShowcase", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", productOutputType: "mainVisual", eventBrief: "这是一次学期成长汇报课，孩子会展示阅读、写作、表达和课堂展示方面的成长。", styleBrief: "明亮、有仪式感、有成果感，也要专业可信。", visualDetails: "中央竖向标题安全光柱、左右作品墙、底部舞台展示台、奖章点缀位于底部两侧、右上 logo 预留区；中心光柱不放人物和麦克风。", avoidNotes: "不要山水卷轴、不要低幼卡通、不要人物太多，不要让主体侵入中央标题安全区。" };
 
 type Validation =
   | { ok: true; body: StandardGenerateV1Request; canvas: { width: number; height: number } }
@@ -49,11 +54,18 @@ export async function POST(request: Request): Promise<Response> {
       canvas,
       request: {
         mainTitle: input.mainTitle.trim(),
-        subtitle: cleanOptional(input.subtitle),
-        keywords: cleanKeywords(input.keywords),
-        sceneKey: cleanOptional(input.sceneKey),
+        subtitle: cleanOptional(input.subtitle) ?? DEFAULT_SUBTITLE,
+        keywords: cleanKeywords(input.keywords) ?? DEFAULT_KEYWORDS,
+        sceneKey: cleanOptional(input.sceneKey) ?? DEFAULT_CONTEXT.sceneKey,
         brandKey: input.brandKey ?? "yuanfangDefault",
-        designFamily: cleanOptional(input.designFamily),
+        designFamily: cleanOptional(input.designFamily) ?? DEFAULT_CONTEXT.designFamily,
+        layoutFamily: DEFAULT_CONTEXT.layoutFamily,
+        displayPolicy: DEFAULT_CONTEXT.displayPolicy,
+        productOutputType: DEFAULT_CONTEXT.productOutputType,
+        eventBrief: DEFAULT_CONTEXT.eventBrief,
+        styleBrief: DEFAULT_CONTEXT.styleBrief,
+        visualDetails: DEFAULT_CONTEXT.visualDetails,
+        avoidNotes: DEFAULT_CONTEXT.avoidNotes,
       },
       backgroundAsset,
       ...(brandAssets ? { brandAssets } : {}),
@@ -117,17 +129,6 @@ function validOptions(value: unknown): boolean {
   return ["includeLogo", "includeMascot", "includeCampusInfo", "debug"].every((key) => value[key] === undefined || typeof value[key] === "boolean");
 }
 
-async function createDebugBackgroundAsset(canvas: { width: number; height: number }): Promise<FinalBackgroundAsset> {
-  const svg = `<svg width="${canvas.width}" height="${canvas.height}" viewBox="0 0 ${canvas.width} ${canvas.height}" xmlns="http://www.w3.org/2000/svg">
-    <defs><linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#F7FBFF"/><stop offset="1" stop-color="#E8F7E5"/></linearGradient></defs>
-    <rect width="${canvas.width}" height="${canvas.height}" fill="url(#bg)"/>
-    <ellipse cx="${canvas.width * 0.68}" cy="${canvas.height * 0.25}" rx="${canvas.width * 0.28}" ry="${canvas.height * 0.16}" fill="#DFF4FF"/>
-    <path d="M0 ${canvas.height * 0.78} C ${canvas.width * 0.25} ${canvas.height * 0.69}, ${canvas.width * 0.52} ${canvas.height * 0.9}, ${canvas.width} ${canvas.height * 0.73} L ${canvas.width} ${canvas.height} L 0 ${canvas.height} Z" fill="#FFF2D6"/>
-  </svg>`;
-  const input = await sharp(Buffer.from(svg)).jpeg({ quality: 82 }).toBuffer();
-  return { source: "debugFixture", input, width: canvas.width, height: canvas.height, mimeType: "image/jpeg", sha256: sha256(input) };
-}
-
 async function prepareBrandAssets(input: StandardGenerateV1Request, warnings: string[]): Promise<{ logo?: FinalBrandLayerAsset; mascot?: FinalBrandLayerAsset } | undefined> {
   const assets: { logo?: FinalBrandLayerAsset; mascot?: FinalBrandLayerAsset } = {};
   if (input.options?.includeLogo !== false) assets.logo = await readBrandAsset(BRAND.logoPath, 180, "topRight", warnings, "logo");
@@ -151,7 +152,7 @@ function mapResult(requestId: string, result: Awaited<ReturnType<typeof generate
     source: "standard-generation-api-v1",
     requestId,
     ...(result.output ? { output: { mimeType: result.output.mimeType, base64: result.output.input.toString("base64"), width: result.output.width, height: result.output.height, sha256: result.output.sha256, byteLength: result.output.byteLength } } : {}),
-    diagnostics: { candidateSource: result.diagnostics.candidatePipelineSource, spatialSource: result.diagnostics.spatialStrategySource, pipelineSource: result.titleCandidatePipelineResult?.source, selectedCandidateId: result.selectedCandidateId, selectedSourceCandidateId: result.selectedSourceCandidateId, layerOrder: result.diagnostics.layerOrder, titleAssetId: result.diagnostics.titleAssetId, warnings: [...assetWarnings, ...result.warnings] },
+    diagnostics: buildDiagnostics(result, assetWarnings),
     safety: { passed: result.safety.passed, codes: result.safety.checks.map((item) => `${item.code}:${item.passed ? "PASS" : "FAIL"}`) },
     ...(errorCode ? { error: { code: errorCode, message: result.reason } } : {}),
     reason: result.reason,
@@ -170,4 +171,3 @@ function validKeywords(value: unknown): boolean { return Array.isArray(value) &&
 function validDimension(value: unknown): value is number { return typeof value === "number" && Number.isInteger(value) && value >= MIN_CANVAS && value <= MAX_CANVAS; }
 function nonEmptyString(value: unknown): value is string { return typeof value === "string" && value.trim().length > 0; }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
-function sha256(input: Buffer): string { return createHash("sha256").update(input).digest("hex"); }
