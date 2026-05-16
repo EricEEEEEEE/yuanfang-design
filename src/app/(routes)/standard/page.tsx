@@ -1,122 +1,127 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { STANDARD_ELEMENTS, STANDARD_STYLES, STANDARD_THEMES } from "@/config/scenes";
-import { StandardOptionGroup, StandardTextInput } from "@/ui/components/StandardOptionGroup";
+import { useState } from "react";
+import type { StandardGenerateV2Request, StandardGenerateV2Response } from "@/models/standard-generation-api-v2";
+import { StandardDebugPanel } from "@/ui/components/StandardDebugPanel";
+import {
+  initialStandardFormV2Values,
+  StandardFormV2,
+  type StandardFormV2Errors,
+  type StandardFormV2Values,
+  type StandardSubmitState,
+} from "@/ui/components/StandardFormV2";
 import { StandardPosterPreview } from "@/ui/components/StandardPosterPreview";
-import { StandardSummaryCard, StandardV1DebugPanel } from "@/ui/components/StandardV1DebugPanel";
-import type { StandardGenerateV1Request, StandardGenerateV1Response } from "@/models/standard-generation-api";
 
-type Option = { key: string; label: string };
-type SubmitState = "idle" | "submitting" | "success" | "validation" | "failed";
-
-const themeOptions = toOptions(STANDARD_THEMES);
-const styleOptions = toOptions(STANDARD_STYLES);
-const elementOptions = toOptions(STANDARD_ELEMENTS);
-
-function toOptions(source: Record<string, { label: string }>): Option[] {
-  return Object.entries(source).map(([key, value]) => ({ key, label: value.label }));
+function readableError(statusCode: number, response?: StandardGenerateV2Response): string {
+  if (statusCode >= 500) return "系统暂时不可用，请稍后重试。";
+  if (response?.error?.userMessage) return response.error.userMessage;
+  if (statusCode === 422) return "生成未通过安全检查，请调整描述后重试。";
+  if (!response?.output?.base64) return "本次未生成海报，请稍后重试。";
+  return "请求参数无效，请检查表单。";
 }
 
-function findLabel(options: Option[], selectedKey: string): string {
-  return options.find((option) => option.key === selectedKey)?.label ?? "";
+function emphasisWords(value: string): string[] | undefined {
+  const words = value.split(/[，,]/).map((item) => item.trim()).filter(Boolean);
+  return words.length ? words : undefined;
 }
 
-function readableError(statusCode: number, response?: StandardGenerateV1Response): string {
-  const code = response?.error?.code;
-  if (["uploaded_image_not_implemented", "generated_background_not_supported_in_v1", "campus_info_asset_not_supported_in_v1"].includes(code ?? "")) {
-    return "当前暂不支持真实背景生成、上传图片或校区信息叠加。";
-  }
-  if (statusCode >= 500) return "系统暂时无法生成预览，请稍后重试。";
-  if (statusCode === 400 || code === "invalid_json" || code === "invalid_request" || code === "missing_main_title") {
-    return "请求参数无效，请刷新后重试。";
-  }
-  if (statusCode === 422 || response?.ok === false || !response?.output?.base64) {
-    return "生成失败：当前 v1 预览链路未能稳定完成，请稍后重试。";
-  }
-  return "系统暂时无法生成预览，请稍后重试。";
+function optionalText(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function validate(values: StandardFormV2Values): StandardFormV2Errors {
+  const errors: StandardFormV2Errors = {};
+  const mainTitle = values.mainTitle.trim();
+  const emphasis = emphasisWords(values.titleEmphasisWords);
+  if (!values.productOutputType) errors.productOutputType = "请选择要做什么图。";
+  if (values.eventBrief.trim().length < 10) errors.eventBrief = "请补充活动或课程内容，至少 10 个字。";
+  if (values.styleBrief.trim().length < 4) errors.styleBrief = "请补充画面感觉，至少 4 个字。";
+  if (mainTitle.length < 2 || mainTitle.length > 16) errors.mainTitle = "主标题需为 2-16 个字。";
+  if (values.subtitle.trim().length > 32) errors.subtitle = "副标题需控制在 32 个字以内。";
+  if (values.titleBrief.trim().length < 2) errors.titleBrief = "请填写标题说明或强调要求。";
+  if (values.visualDetails.trim().length > 300) errors.visualDetails = "画面元素需控制在 300 个字以内。";
+  if (values.avoidNotes.trim().length > 200) errors.avoidNotes = "不希望出现的内容需控制在 200 个字以内。";
+  if (emphasis?.some((word) => !mainTitle.includes(word))) errors.titleEmphasisWords = "重点突出词必须来自主标题。";
+  return errors;
+}
+
+function buildRequest(values: StandardFormV2Values): StandardGenerateV2Request {
+  return {
+    source: "standard-form-v2",
+    brandKey: "yuanfangDefault",
+    canvas: { width: 1080, height: 1620 },
+    form: {
+      productOutputType: values.productOutputType,
+      eventBrief: values.eventBrief.trim(),
+      styleBrief: values.styleBrief.trim(),
+      ...(optionalText(values.visualDetails) ? { visualDetails: values.visualDetails.trim() } : {}),
+      titleBrief: values.titleBrief.trim(),
+      ...(optionalText(values.avoidNotes) ? { avoidNotes: values.avoidNotes.trim() } : {}),
+    },
+    title: {
+      mainTitle: values.mainTitle.trim(),
+      ...(optionalText(values.subtitle) ? { subtitle: values.subtitle.trim() } : {}),
+      ...(emphasisWords(values.titleEmphasisWords) ? { titleEmphasisWords: emphasisWords(values.titleEmphasisWords) } : {}),
+    },
+    background: { mode: "debugFixture" },
+    options: {
+      includeLogo: values.includeLogo,
+      includeMascot: values.includeMascot,
+      includeCampusInfo: false,
+      outputMimeType: "image/jpeg",
+      jpegQuality: 78,
+      debug: true,
+    },
+  };
 }
 
 export default function StandardPage() {
-  const [selectedTheme, setSelectedTheme] = useState(themeOptions[0].key);
-  const [selectedStyle, setSelectedStyle] = useState(styleOptions[0].key);
-  const [selectedElement, setSelectedElement] = useState(elementOptions[0].key);
-  const [mainTitle, setMainTitle] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [status, setStatus] = useState<SubmitState>("idle");
+  const [values, setValues] = useState<StandardFormV2Values>(initialStandardFormV2Values);
+  const [errors, setErrors] = useState<StandardFormV2Errors>({});
+  const [status, setStatus] = useState<StandardSubmitState>("idle");
   const [message, setMessage] = useState("");
-  const [result, setResult] = useState<StandardGenerateV1Response | null>(null);
-  const selectedThemeLabel = findLabel(themeOptions, selectedTheme);
-  const selectedStyleLabel = findLabel(styleOptions, selectedStyle);
-  const selectedElementLabel = findLabel(elementOptions, selectedElement);
-  const summaryItems = [
-    { label: "已选主题", value: selectedThemeLabel },
-    { label: "已选风格", value: selectedStyleLabel },
-    { label: "已选元素", value: selectedElementLabel },
-    { label: "主标题", value: mainTitle || "-" },
-    { label: "副标题", value: subtitle || "-" },
-  ];
+  const [result, setResult] = useState<StandardGenerateV2Response | null>(null);
+
+  function updateField<K extends keyof StandardFormV2Values>(field: K, value: StandardFormV2Values[K]) {
+    setValues((current) => ({ ...current, [field]: value }));
+    setErrors((current) => ({ ...current, [field]: undefined }));
+  }
 
   async function submitPreview() {
-    const trimmedTitle = mainTitle.trim();
-    const trimmedSubtitle = subtitle.trim();
-
-    if (!trimmedTitle) {
+    const nextErrors = validate(values);
+    if (Object.values(nextErrors).some(Boolean)) {
+      setErrors(nextErrors);
       setStatus("validation");
-      setMessage("标题不能为空。");
+      setMessage("请先修正表单中的提示。");
       setResult(null);
       return;
     }
-
-    const requestBody: StandardGenerateV1Request = {
-      mainTitle: trimmedTitle,
-      ...(trimmedSubtitle ? { subtitle: trimmedSubtitle } : {}),
-      keywords: [selectedThemeLabel, selectedStyleLabel, selectedElementLabel],
-      brandKey: "yuanfangDefault",
-      canvas: { width: 1080, height: 1620 },
-      background: { mode: "debugFixture" },
-      options: {
-        includeLogo: true,
-        includeMascot: false,
-        includeCampusInfo: false,
-        outputMimeType: "image/jpeg",
-        jpegQuality: 78,
-        debug: true,
-      },
-    };
 
     setStatus("submitting");
     setMessage("");
     setResult(null);
 
     try {
-      const response = await fetch("/api/generate/standard/v1", {
+      const response = await fetch("/api/generate/standard/v2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(buildRequest(values)),
       });
-      const body = (await response.json()) as StandardGenerateV1Response;
-
+      const body = (await response.json()) as StandardGenerateV2Response;
       if (!response.ok || !body.ok || !body.output?.base64) {
         setStatus("failed");
         setMessage(readableError(response.status, body));
         setResult(body);
         return;
       }
-
       setStatus("success");
-      setMessage("");
       setResult(body);
     } catch {
       setStatus("failed");
-      setMessage("系统暂时无法生成预览，请稍后重试。");
+      setMessage("系统暂时不可用，请稍后重试。");
       setResult(null);
     }
-  }
-
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void submitPreview();
   }
 
   return (
@@ -125,8 +130,10 @@ export default function StandardPage() {
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-medium text-blue-700">内部测试模式</p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-950">标准模式 v1 预览</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">当前使用固定测试背景验证标题生成与合成链路，暂不代表正式生产效果。</p>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-950">标准模式 v2 预览</h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              通过结构化创意简报生成测试海报，当前仍使用固定测试背景，暂不代表正式生产效果。
+            </p>
           </div>
           <a
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
@@ -136,63 +143,13 @@ export default function StandardPage() {
           </a>
         </header>
 
-        <form
-          className="space-y-8 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200"
-          onSubmit={handleSubmit}
-        >
-          <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
-            这些选项仅作为 v1 预览关键词，用于辅助生成测试海报。
-          </p>
-
-          <StandardOptionGroup onSelect={setSelectedTheme} options={themeOptions} selectedKey={selectedTheme} title="主题词" />
-          <StandardOptionGroup onSelect={setSelectedStyle} options={styleOptions} selectedKey={selectedStyle} title="风格词" />
-          <StandardOptionGroup onSelect={setSelectedElement} options={elementOptions} selectedKey={selectedElement} title="元素词" />
-
-          <section className="space-y-4">
-            <h2 className="text-base font-semibold text-slate-950">海报文案</h2>
-            <StandardTextInput label="主标题" onChange={setMainTitle} placeholder="请输入海报主标题" value={mainTitle} />
-            <StandardTextInput label="副标题" onChange={setSubtitle} placeholder="请输入海报副标题" value={subtitle} />
-          </section>
-
-          <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
-            v1 暂不叠加校区信息，校区名称和电话不会发送。
-          </p>
-
-          <button
-            className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={status === "submitting"}
-            type="submit"
-          >
-            {status === "submitting" ? "生成中…" : "生成 v1 预览图"}
-          </button>
-
-          {status === "submitting" ? <p className="text-center text-sm text-slate-500">生成中，可能需要几十秒。</p> : null}
-
-          {message ? (
-            <div className="space-y-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              <p>{message}</p>
-              {status === "failed" ? (
-                <button
-                  className="rounded-md border border-red-200 bg-white px-3 py-2 font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={() => void submitPreview()}
-                  type="button"
-                >
-                  重试一次
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </form>
+        <StandardFormV2 errors={errors} message={message} onChange={updateField} onSubmit={() => void submitPreview()} submitState={status} values={values} />
 
         {status === "success" && result?.output?.base64 ? (
           <StandardPosterPreview base64={result.output.base64} height={result.output.height} mimeType={result.output.mimeType} width={result.output.width} />
         ) : null}
 
-        {result?.diagnostics || result?.safety ? (
-          <StandardV1DebugPanel response={result} />
-        ) : null}
-
-        <StandardSummaryCard items={summaryItems} title="当前选择" />
+        {result?.diagnostics || result?.safety ? <StandardDebugPanel response={result} /> : null}
       </section>
     </main>
   );

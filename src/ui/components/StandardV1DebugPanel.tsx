@@ -1,7 +1,11 @@
-import type { StandardGenerateV1Response } from "@/models/standard-generation-api";
-
 type StandardV1DebugPanelProps = {
-  response: StandardGenerateV1Response;
+  response: {
+    requestId: string;
+    reason: string;
+    error?: { code: string };
+    safety?: { codes: string[] };
+    diagnostics?: { warnings?: string[] };
+  };
 };
 
 type SummaryItem = {
