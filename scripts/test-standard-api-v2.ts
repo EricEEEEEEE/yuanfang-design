@@ -20,6 +20,18 @@ const VALID_PAYLOAD: StandardGenerateV2Request = {
   background: { mode: "debugFixture" },
   options: { includeLogo: true, includeMascot: false, includeCampusInfo: false, outputMimeType: "image/jpeg", jpegQuality: 78, debug: true },
 };
+const QUALITY_PAYLOAD: StandardGenerateV2Request = {
+  ...VALID_PAYLOAD,
+  form: {
+    productOutputType: "enrollment",
+    eventBrief: "孩子可以通过假期免费上 4 节课，感受四大名著内容，让孩子爱上名著、爱上文学、爱上语文。",
+    styleBrief: "能够让家长感受到四大名著的那种感觉，并且一眼能看出来。不要和传统四大名著感觉一样，要有高级感。",
+    visualDetails: "希望图片里出现四大名著的代表人物或者书籍，同时表现出孩子渴望阅读四大名著的感觉。",
+    titleBrief: "希望突出四大名著四个字，让家长知道我们通过四大名著课程招收孩子，因为四大名著在中国人人皆知。",
+    avoidNotes: "不要出现真实儿童照片，不要有压抑的颜色，也不要有日本动漫的感觉。",
+  },
+  title: { mainTitle: "暑期体验课", subtitle: "四大名著体验营" },
+};
 
 type ApiResult = { status: number; body: StandardGenerateV2Response };
 type PosterStatus = "PASS_POSTER_SMOKE" | "PASS_CONTRACT_FAIL_CLOSED" | "FAIL_UNEXPECTED";
@@ -35,6 +47,8 @@ async function runDefaultSmoke(): Promise<void> {
   const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
   const valid = await callApi(VALID_PAYLOAD);
   printValid(valid);
+  const quality = await callApi(QUALITY_PAYLOAD);
+  printQualitySample(quality);
 
   const originalKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "";
@@ -112,8 +126,28 @@ function printValid(result: ApiResult): void {
   console.log("STANDARD_API_V2_SPATIAL_SOURCE", result.body.diagnostics?.spatialSource ?? "none");
   console.log("STANDARD_API_V2_BACKGROUND_LAYOUT_SOURCE", result.body.diagnostics?.backgroundLayoutSource ?? "none");
   console.log("STANDARD_API_V2_FORM_MAPPING_SUMMARY", JSON.stringify(result.body.diagnostics?.formMappingSummary ?? null));
+  printQuality("STANDARD_API_V2", result);
   console.log("STANDARD_API_V2_SAFETY_PASSED", result.body.safety?.passed ? "YES" : "NO");
   console.log("STANDARD_API_V2_REASON", result.body.reason);
+}
+
+function printQualitySample(result: ApiResult): void {
+  console.log("STANDARD_API_V2_QUALITY_SAMPLE_STATUS", result.status);
+  console.log("STANDARD_API_V2_QUALITY_SAMPLE_OK", result.body.ok ? "YES" : "NO");
+  console.log("STANDARD_API_V2_QUALITY_SAMPLE_POSTER_SMOKE_STATUS", posterStatus(result));
+  printQuality("STANDARD_API_V2_QUALITY_SAMPLE", result);
+}
+
+function printQuality(prefix: string, result: ApiResult): void {
+  const q = result.body.diagnostics?.productQualityDiagnostics;
+  console.log(`${prefix}_OUTPUT_QUALITY_MODE`, q?.outputQualityMode ?? "none");
+  console.log(`${prefix}_BACKGROUND_MODE`, q?.backgroundMode ?? "none");
+  console.log(`${prefix}_BACKGROUND_CAN_REFLECT_THEME`, q?.semanticAlignment.backgroundCanReflectTheme ? "YES" : "NO");
+  console.log(`${prefix}_VISUAL_HOOK`, q?.visualHook.detectedPrimaryHook ?? "none");
+  console.log(`${prefix}_VISUAL_HOOK_SOURCE`, q?.visualHook.source ?? "none");
+  console.log(`${prefix}_VISUAL_HOOK_MISMATCH`, q?.visualHook.possibleMismatch ? "YES" : "NO");
+  console.log(`${prefix}_FORM_FIELD_CONSUMPTION`, JSON.stringify(q?.formFieldConsumption ?? null));
+  console.log(`${prefix}_PRODUCT_QUALITY_WARNINGS`, JSON.stringify(q?.warnings ?? []));
 }
 
 async function callApi(payload: unknown): Promise<ApiResult> {

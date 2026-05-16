@@ -54,6 +54,52 @@ export type StandardGenerateV2Output = {
   byteLength: number;
 };
 
+export type StandardGenerateV2FieldConsumption = "consumed" | "partially_consumed" | "diagnostic_only";
+
+export type StandardGenerateV2ProductQualityDiagnostics = {
+  outputQualityMode: "debug_fixture_smoke" | "product_quality_candidate";
+  backgroundMode: StandardFormV2Background["mode"];
+  backgroundLimitation: string;
+  formFieldConsumption: {
+    productOutputType: "consumed";
+    eventBrief: StandardGenerateV2FieldConsumption;
+    styleBrief: StandardGenerateV2FieldConsumption;
+    visualDetails: StandardGenerateV2FieldConsumption;
+    titleBrief: StandardGenerateV2FieldConsumption;
+    avoidNotes: StandardGenerateV2FieldConsumption;
+    titleEmphasisWords: StandardGenerateV2FieldConsumption;
+  };
+  visualHook: {
+    detectedPrimaryHook?: string;
+    source: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "manual" | "none";
+    mainTitle: string;
+    subtitle?: string;
+    possibleMismatch: boolean;
+    mismatchReason?: string;
+  };
+  semanticAlignment: {
+    requestedThemeHints: string[];
+    backgroundCanReflectTheme: boolean;
+    titleCanReflectTheme: boolean;
+    limitationReason: string;
+  };
+  intentDiagnostics: {
+    productOutputType?: string;
+    designFamily?: string;
+    contentIntent?: string;
+    sceneKey?: string;
+    patternHints?: string[];
+  };
+  titleDiagnostics: {
+    selectedCandidateId?: string;
+    selectedSourceCandidateId?: string;
+    titleFocus?: string;
+    subtitleUsedAsSupport?: boolean;
+    titleBriefInfluence?: "strong" | "partial" | "weak" | "none";
+  };
+  warnings: string[];
+};
+
 export type StandardGenerateV2Diagnostics = {
   selectedCandidateId?: string;
   selectedSourceCandidateId?: string;
@@ -61,6 +107,7 @@ export type StandardGenerateV2Diagnostics = {
   spatialSource?: string;
   backgroundLayoutSource?: string;
   formMappingSummary?: Record<string, unknown>;
+  productQualityDiagnostics?: StandardGenerateV2ProductQualityDiagnostics;
   warnings?: string[];
 };
 

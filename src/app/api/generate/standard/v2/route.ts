@@ -51,7 +51,7 @@ export async function POST(request: Request): Promise<Response> {
     const result = await generateStandardPoster(input);
     const code = resultErrorCode(result);
     const ok = !code;
-    return Response.json(mapResult(requestId, result, assetWarnings, summary, ok, code), { status: ok ? 200 : 422 });
+    return Response.json(mapResult(requestId, result, assetWarnings, summary, body, ok, code), { status: ok ? 200 : 422 });
   } catch {
     return failure(requestId, 500, "internal_error");
   }
@@ -137,13 +137,13 @@ async function readBrandAsset(path: string, width: number, placementPolicy: Fina
   }
 }
 
-function mapResult(requestId: string, result: Awaited<ReturnType<typeof generateStandardPoster>>, assetWarnings: string[], summary: Record<string, unknown>, ok: boolean, code?: StandardGenerateV2ErrorCode): StandardGenerateV2Response {
+function mapResult(requestId: string, result: Awaited<ReturnType<typeof generateStandardPoster>>, assetWarnings: string[], summary: Record<string, unknown>, body: StandardGenerateV2Request, ok: boolean, code?: StandardGenerateV2ErrorCode): StandardGenerateV2Response {
   return {
     ok,
     source: "standard-api-v2",
     requestId,
     ...(result.output ? { output: { mimeType: "image/jpeg", base64: result.output.input.toString("base64"), width: result.output.width, height: result.output.height, sha256: result.output.sha256, byteLength: result.output.byteLength } } : {}),
-    diagnostics: buildV2Diagnostics(result, assetWarnings, summary),
+    diagnostics: buildV2Diagnostics(result, assetWarnings, summary, body),
     safety: { passed: result.safety.passed, codes: result.safety.checks.map((item) => `${item.code}:${item.passed ? "PASS" : "FAIL"}`) },
     ...(code ? { error: errorPayload(code, result.reason) } : {}),
     reason: result.reason,
