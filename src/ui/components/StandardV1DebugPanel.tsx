@@ -13,6 +13,7 @@ export function StandardV1DebugPanel({ response }: StandardV1DebugPanelProps) {
   const items = [
     { label: "requestId", value: response.requestId },
     { label: "reason", value: response.reason },
+    { label: "errorCode", value: response.error?.code || "-" },
     { label: "safety", value: response.safety?.codes.join(", ") || "-" },
     {
       label: "warnings",
@@ -21,8 +22,10 @@ export function StandardV1DebugPanel({ response }: StandardV1DebugPanelProps) {
   ];
 
   return (
-    <section className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <h2 className="text-base font-semibold text-slate-950">调试信息</h2>
+    <details className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <summary className="cursor-pointer text-base font-semibold text-slate-950">
+        调试信息（内部）
+      </summary>
       <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
         {items.map((item) => (
           <div className="flex justify-between gap-4" key={item.label}>
@@ -33,7 +36,7 @@ export function StandardV1DebugPanel({ response }: StandardV1DebugPanelProps) {
           </div>
         ))}
       </dl>
-    </section>
+    </details>
   );
 }
 

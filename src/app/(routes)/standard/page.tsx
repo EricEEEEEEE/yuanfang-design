@@ -22,10 +22,19 @@ function findLabel(options: Option[], selectedKey: string): string {
   return options.find((option) => option.key === selectedKey)?.label ?? "";
 }
 
-function readableError(response: StandardGenerateV1Response): string {
-  if (response.error?.message) return response.error.message;
-  if (response.error?.code) return `生成失败：${response.error.code}`;
-  return "标准模式 v1 预览失败，请稍后重试";
+function readableError(statusCode: number, response?: StandardGenerateV1Response): string {
+  const code = response?.error?.code;
+  if (["uploaded_image_not_implemented", "generated_background_not_supported_in_v1", "campus_info_asset_not_supported_in_v1"].includes(code ?? "")) {
+    return "当前暂不支持真实背景生成、上传图片或校区信息叠加。";
+  }
+  if (statusCode >= 500) return "系统暂时无法生成预览，请稍后重试。";
+  if (statusCode === 400 || code === "invalid_json" || code === "invalid_request" || code === "missing_main_title") {
+    return "请求参数无效，请刷新后重试。";
+  }
+  if (statusCode === 422 || response?.ok === false || !response?.output?.base64) {
+    return "生成失败：当前 v1 预览链路未能稳定完成，请稍后重试。";
+  }
+  return "系统暂时无法生成预览，请稍后重试。";
 }
 
 export default function StandardPage() {
@@ -48,14 +57,13 @@ export default function StandardPage() {
     { label: "副标题", value: subtitle || "-" },
   ];
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitPreview() {
     const trimmedTitle = mainTitle.trim();
     const trimmedSubtitle = subtitle.trim();
 
     if (!trimmedTitle) {
       setStatus("validation");
-      setMessage("请填写主标题");
+      setMessage("标题不能为空。");
       setResult(null);
       return;
     }
@@ -91,7 +99,7 @@ export default function StandardPage() {
 
       if (!response.ok || !body.ok || !body.output?.base64) {
         setStatus("failed");
-        setMessage(readableError(body));
+        setMessage(readableError(response.status, body));
         setResult(body);
         return;
       }
@@ -101,9 +109,14 @@ export default function StandardPage() {
       setResult(body);
     } catch {
       setStatus("failed");
-      setMessage("标准模式 v1 预览失败，请稍后重试");
+      setMessage("系统暂时无法生成预览，请稍后重试。");
       setResult(null);
     }
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitPreview();
   }
 
   return (
@@ -113,9 +126,7 @@ export default function StandardPage() {
           <div>
             <p className="text-sm font-medium text-blue-700">内部测试模式</p>
             <h1 className="mt-2 text-2xl font-semibold text-slate-950">标准模式 v1 预览</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              当前使用固定测试背景验证标题生成与合成链路，暂不代表正式生产效果。
-            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">当前使用固定测试背景验证标题生成与合成链路，暂不代表正式生产效果。</p>
           </div>
           <a
             className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
@@ -129,6 +140,10 @@ export default function StandardPage() {
           className="space-y-8 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200"
           onSubmit={handleSubmit}
         >
+          <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-500">
+            这些选项仅作为 v1 预览关键词，用于辅助生成测试海报。
+          </p>
+
           <StandardOptionGroup onSelect={setSelectedTheme} options={themeOptions} selectedKey={selectedTheme} title="主题词" />
           <StandardOptionGroup onSelect={setSelectedStyle} options={styleOptions} selectedKey={selectedStyle} title="风格词" />
           <StandardOptionGroup onSelect={setSelectedElement} options={elementOptions} selectedKey={selectedElement} title="元素词" />
@@ -151,10 +166,21 @@ export default function StandardPage() {
             {status === "submitting" ? "生成中…" : "生成 v1 预览图"}
           </button>
 
+          {status === "submitting" ? <p className="text-center text-sm text-slate-500">生成中，可能需要几十秒。</p> : null}
+
           {message ? (
-            <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              {message}
-            </p>
+            <div className="space-y-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p>{message}</p>
+              {status === "failed" ? (
+                <button
+                  className="rounded-md border border-red-200 bg-white px-3 py-2 font-medium text-red-700 transition hover:border-red-300 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void submitPreview()}
+                  type="button"
+                >
+                  重试一次
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </form>
 
