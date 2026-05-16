@@ -2,108 +2,30 @@
 
 import { FormEvent, useState } from "react";
 import { STANDARD_ELEMENTS, STANDARD_STYLES, STANDARD_THEMES } from "@/config/scenes";
+import { StandardOptionGroup, StandardTextInput } from "@/ui/components/StandardOptionGroup";
+import { StandardPosterPreview } from "@/ui/components/StandardPosterPreview";
+import { StandardSummaryCard, StandardV1DebugPanel } from "@/ui/components/StandardV1DebugPanel";
+import type { StandardGenerateV1Request, StandardGenerateV1Response } from "@/models/standard-generation-api";
 
-type Option = {
-  key: string;
-  label: string;
-};
+type Option = { key: string; label: string };
+type SubmitState = "idle" | "submitting" | "success" | "validation" | "failed";
 
-type OptionGroupProps = {
-  title: string;
-  options: Option[];
-  selectedKey: string;
-  onSelect: (key: string) => void;
-};
+const themeOptions = toOptions(STANDARD_THEMES);
+const styleOptions = toOptions(STANDARD_STYLES);
+const elementOptions = toOptions(STANDARD_ELEMENTS);
 
-type TextFieldProps = {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-  inputMode?: "tel";
-};
-
-type TestComposeResponse = {
-  imageBase64: string;
-  modelUsed: string;
-  overlayData: {
-    mainTitle: string;
-    subtitle?: string;
-    campusName: string;
-    campusAddress?: string;
-    campusPhone: string;
-  };
-};
-
-const themeOptions = Object.entries(STANDARD_THEMES).map(([key, value]) => ({
-  key,
-  label: value.label,
-}));
-const styleOptions = Object.entries(STANDARD_STYLES).map(([key, value]) => ({
-  key,
-  label: value.label,
-}));
-const elementOptions = Object.entries(STANDARD_ELEMENTS).map(([key, value]) => ({
-  key,
-  label: value.label,
-}));
+function toOptions(source: Record<string, { label: string }>): Option[] {
+  return Object.entries(source).map(([key, value]) => ({ key, label: value.label }));
+}
 
 function findLabel(options: Option[], selectedKey: string): string {
   return options.find((option) => option.key === selectedKey)?.label ?? "";
 }
 
-function OptionGroup({
-  title,
-  options,
-  selectedKey,
-  onSelect,
-}: OptionGroupProps) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-base font-semibold text-slate-950">{title}</h2>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {options.map((option) => {
-          const isSelected = option.key === selectedKey;
-
-          return (
-            <button
-              className={`rounded-lg border px-4 py-3 text-sm font-medium transition ${
-                isSelected
-                  ? "border-blue-600 bg-blue-50 text-blue-700"
-                  : "border-slate-200 bg-white text-slate-700 hover:border-blue-200"
-              }`}
-              key={option.key}
-              onClick={() => onSelect(option.key)}
-              type="button"
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function TextField({
-  label,
-  value,
-  placeholder,
-  onChange,
-  inputMode,
-}: TextFieldProps) {
-  return (
-    <label className="block">
-      <span className="text-sm font-medium text-slate-700">{label}</span>
-      <input
-        className="mt-2 w-full rounded-lg border border-slate-200 px-4 py-3 text-base text-slate-950 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-        inputMode={inputMode}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        value={value}
-      />
-    </label>
-  );
+function readableError(response: StandardGenerateV1Response): string {
+  if (response.error?.message) return response.error.message;
+  if (response.error?.code) return `生成失败：${response.error.code}`;
+  return "标准模式 v1 预览失败，请稍后重试";
 }
 
 export default function StandardPage() {
@@ -112,72 +34,75 @@ export default function StandardPage() {
   const [selectedElement, setSelectedElement] = useState(elementOptions[0].key);
   const [mainTitle, setMainTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
-  const [campusName, setCampusName] = useState("");
-  const [campusAddress, setCampusAddress] = useState("");
-  const [campusPhone, setCampusPhone] = useState("");
-  const [notice, setNotice] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedPoster, setGeneratedPoster] = useState<TestComposeResponse | null>(null);
+  const [status, setStatus] = useState<SubmitState>("idle");
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<StandardGenerateV1Response | null>(null);
+  const selectedThemeLabel = findLabel(themeOptions, selectedTheme);
+  const selectedStyleLabel = findLabel(styleOptions, selectedStyle);
+  const selectedElementLabel = findLabel(elementOptions, selectedElement);
   const summaryItems = [
-    { label: "已选主题", value: findLabel(themeOptions, selectedTheme) },
-    { label: "已选风格", value: findLabel(styleOptions, selectedStyle) },
-    { label: "已选元素", value: findLabel(elementOptions, selectedElement) },
+    { label: "已选主题", value: selectedThemeLabel },
+    { label: "已选风格", value: selectedStyleLabel },
+    { label: "已选元素", value: selectedElementLabel },
     { label: "主标题", value: mainTitle || "-" },
     { label: "副标题", value: subtitle || "-" },
-    { label: "校区名称", value: campusName || "-" },
-    { label: "校区地址", value: campusAddress || "-" },
-    { label: "联系电话", value: campusPhone || "-" },
   ];
-  const overlayItems = generatedPoster
-    ? [
-        { label: "主标题", value: generatedPoster.overlayData.mainTitle },
-        { label: "副标题", value: generatedPoster.overlayData.subtitle || "-" },
-        { label: "校区名称", value: generatedPoster.overlayData.campusName },
-        { label: "校区地址", value: generatedPoster.overlayData.campusAddress || "-" },
-        { label: "联系电话", value: generatedPoster.overlayData.campusPhone },
-      ]
-    : [];
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const trimmedTitle = mainTitle.trim();
+    const trimmedSubtitle = subtitle.trim();
 
-    if (!mainTitle.trim() || !campusName.trim() || !campusPhone.trim()) {
-      setNotice("请填写主标题、校区名称和联系电话");
+    if (!trimmedTitle) {
+      setStatus("validation");
+      setMessage("请填写主标题");
+      setResult(null);
       return;
     }
 
-    setNotice("");
-    setIsGenerating(true);
+    const requestBody: StandardGenerateV1Request = {
+      mainTitle: trimmedTitle,
+      ...(trimmedSubtitle ? { subtitle: trimmedSubtitle } : {}),
+      keywords: [selectedThemeLabel, selectedStyleLabel, selectedElementLabel],
+      brandKey: "yuanfangDefault",
+      canvas: { width: 1080, height: 1620 },
+      background: { mode: "debugFixture" },
+      options: {
+        includeLogo: true,
+        includeMascot: false,
+        includeCampusInfo: false,
+        outputMimeType: "image/jpeg",
+        jpegQuality: 78,
+        debug: true,
+      },
+    };
+
+    setStatus("submitting");
+    setMessage("");
+    setResult(null);
 
     try {
-      const response = await fetch("/api/generate/standard/test-compose", {
+      const response = await fetch("/api/generate/standard/v1", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          theme: selectedTheme,
-          style: selectedStyle,
-          element: selectedElement,
-          mainTitle,
-          subtitle,
-          campusName,
-          campusAddress,
-          campusPhone,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
       });
+      const body = (await response.json()) as StandardGenerateV1Response;
 
-      if (!response.ok) {
-        throw new Error("TEST_COMPOSE_FAILED");
+      if (!response.ok || !body.ok || !body.output?.base64) {
+        setStatus("failed");
+        setMessage(readableError(body));
+        setResult(body);
+        return;
       }
 
-      const result = (await response.json()) as TestComposeResponse;
-
-      setGeneratedPoster(result);
+      setStatus("success");
+      setMessage("");
+      setResult(body);
     } catch {
-      setNotice("生成失败，请稍后重试");
-    } finally {
-      setIsGenerating(false);
+      setStatus("failed");
+      setMessage("标准模式 v1 预览失败，请稍后重试");
+      setResult(null);
     }
   }
 
@@ -186,9 +111,10 @@ export default function StandardPage() {
       <section className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-950">标准模式</h1>
+            <p className="text-sm font-medium text-blue-700">内部测试模式</p>
+            <h1 className="mt-2 text-2xl font-semibold text-slate-950">标准模式 v1 预览</h1>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              选择主题、风格和画面元素，生成远方文学品牌海报。
+              当前使用固定测试背景验证标题生成与合成链路，暂不代表正式生产效果。
             </p>
           </div>
           <a
@@ -203,73 +129,44 @@ export default function StandardPage() {
           className="space-y-8 rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200"
           onSubmit={handleSubmit}
         >
-          <OptionGroup onSelect={setSelectedTheme} options={themeOptions} selectedKey={selectedTheme} title="主题词" />
-          <OptionGroup onSelect={setSelectedStyle} options={styleOptions} selectedKey={selectedStyle} title="风格词" />
-          <OptionGroup onSelect={setSelectedElement} options={elementOptions} selectedKey={selectedElement} title="元素词" />
+          <StandardOptionGroup onSelect={setSelectedTheme} options={themeOptions} selectedKey={selectedTheme} title="主题词" />
+          <StandardOptionGroup onSelect={setSelectedStyle} options={styleOptions} selectedKey={selectedStyle} title="风格词" />
+          <StandardOptionGroup onSelect={setSelectedElement} options={elementOptions} selectedKey={selectedElement} title="元素词" />
 
           <section className="space-y-4">
             <h2 className="text-base font-semibold text-slate-950">海报文案</h2>
-            <TextField label="主标题" onChange={setMainTitle} placeholder="请输入海报主标题" value={mainTitle} />
-            <TextField label="副标题" onChange={setSubtitle} placeholder="请输入海报副标题" value={subtitle} />
+            <StandardTextInput label="主标题" onChange={setMainTitle} placeholder="请输入海报主标题" value={mainTitle} />
+            <StandardTextInput label="副标题" onChange={setSubtitle} placeholder="请输入海报副标题" value={subtitle} />
           </section>
 
-          <section className="space-y-4">
-            <h2 className="text-base font-semibold text-slate-950">校区信息</h2>
-            <TextField label="校区名称" onChange={setCampusName} placeholder="请输入校区名称" value={campusName} />
-            <TextField label="校区地址" onChange={setCampusAddress} placeholder="请输入校区地址" value={campusAddress} />
-            <TextField inputMode="tel" label="联系电话" onChange={setCampusPhone} placeholder="请输入联系电话" value={campusPhone} />
-          </section>
+          <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-700">
+            v1 暂不叠加校区信息，校区名称和电话不会发送。
+          </p>
 
           <button
             className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            disabled={isGenerating}
+            disabled={status === "submitting"}
             type="submit"
           >
-            {isGenerating ? "生成中…" : "生成海报"}
+            {status === "submitting" ? "生成中…" : "生成 v1 预览图"}
           </button>
 
-          {notice ? (
+          {message ? (
             <p className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-              {notice}
+              {message}
             </p>
           ) : null}
         </form>
 
-        {generatedPoster ? (
-          <section className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-base font-semibold text-slate-950">生成结果</h2>
-              <p className="text-sm text-slate-500">
-                模型：{generatedPoster.modelUsed}
-              </p>
-            </div>
-            <img
-              alt="标准模式合成海报"
-              className="mt-4 w-full rounded-lg border border-slate-200"
-              src={`data:image/jpeg;base64,${generatedPoster.imageBase64}`}
-            />
-            <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-              {overlayItems.map((item) => (
-                <div className="flex justify-between gap-4" key={item.label}>
-                  <dt className="text-slate-500">{item.label}</dt>
-                  <dd className="font-medium text-slate-950">{item.value}</dd>
-                </div>
-              ))}
-            </dl>
-          </section>
+        {status === "success" && result?.output?.base64 ? (
+          <StandardPosterPreview base64={result.output.base64} height={result.output.height} mimeType={result.output.mimeType} width={result.output.width} />
         ) : null}
 
-        <section className="rounded-lg bg-white p-5 shadow-sm ring-1 ring-slate-200">
-          <h2 className="text-base font-semibold text-slate-950">当前选择</h2>
-          <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-            {summaryItems.map((item) => (
-              <div className="flex justify-between gap-4" key={item.label}>
-                <dt className="text-slate-500">{item.label}</dt>
-                <dd className="font-medium text-slate-950">{item.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section>
+        {result?.diagnostics || result?.safety ? (
+          <StandardV1DebugPanel response={result} />
+        ) : null}
+
+        <StandardSummaryCard items={summaryItems} title="当前选择" />
       </section>
     </main>
   );
