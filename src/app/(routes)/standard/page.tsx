@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { StandardGenerateV2Request, StandardGenerateV2Response } from "@/models/standard-generation-api-v2";
+import { StandardBrandHeader } from "@/ui/components/StandardBrandHeader";
 import { StandardDebugPanel } from "@/ui/components/StandardDebugPanel";
 import {
   initialStandardFormV2Values,
@@ -127,21 +128,7 @@ export default function StandardPage() {
   return (
     <main className="min-h-screen bg-slate-50 px-4 py-6">
       <section className="mx-auto flex w-full max-w-4xl flex-col gap-6">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-blue-700">内部测试模式</p>
-            <h1 className="mt-2 text-2xl font-semibold text-slate-950">标准模式 v2 预览</h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              通过结构化创意简报生成测试海报，当前仍使用固定测试背景，暂不代表正式生产效果。
-            </p>
-          </div>
-          <a
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-center text-sm font-medium text-slate-700 shadow-sm transition hover:border-blue-200 hover:text-blue-700"
-            href="/dashboard"
-          >
-            返回 Dashboard
-          </a>
-        </header>
+        <StandardBrandHeader />
 
         <StandardFormV2 errors={errors} message={message} onChange={updateField} onSubmit={() => void submitPreview()} submitState={status} values={values} />
 

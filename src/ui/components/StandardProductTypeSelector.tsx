@@ -5,12 +5,12 @@ export const STANDARD_PRODUCT_TYPE_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
-  { value: "achievementShowcase", label: "成果展示", description: "展示阅读、写作、表达成果" },
-  { value: "enrollment", label: "招生宣传", description: "课程报名、试听、转化场景" },
-  { value: "festival", label: "节日/活动", description: "读书节、诗词赛、主题活动" },
-  { value: "classReview", label: "课堂回顾", description: "记录课堂过程与学习瞬间" },
-  { value: "parentNotice", label: "家长通知", description: "正式、清晰的家长沟通图" },
-  { value: "socialPost", label: "朋友圈图文", description: "适合日常传播的品牌图" },
+  { value: "achievementShowcase", label: "成果展示", description: "展示课堂成果、作品汇报和孩子成长。" },
+  { value: "enrollment", label: "招生宣传", description: "用于课程报名、新班推广和公开课招募。" },
+  { value: "festival", label: "节日/活动", description: "用于节日祝福、节气活动和主题活动。" },
+  { value: "classReview", label: "课堂回顾", description: "用于记录课堂片段和学习过程。" },
+  { value: "parentNotice", label: "家长通知", description: "用于重要事项提醒和家校沟通。" },
+  { value: "socialPost", label: "朋友圈图文", description: "用于社群传播和轻量分享。" },
 ];
 
 type StandardProductTypeSelectorProps = {
@@ -28,7 +28,9 @@ export function StandardProductTypeSelector({
     <section className="space-y-3">
       <div>
         <h2 className="text-base font-semibold text-slate-950">你要做什么图？</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-500">选择最接近这次传播目标的类型。</p>
+        <p className="mt-1 text-sm leading-6 text-slate-500">
+          选择最接近的用途，系统会根据用途调整内容表达和版式倾向。
+        </p>
       </div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {STANDARD_PRODUCT_TYPE_OPTIONS.map((option) => (

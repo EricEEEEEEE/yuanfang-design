@@ -27,8 +27,8 @@ export function StandardOptionsPanel({
           type="checkbox"
         />
         <span>
-          <span className="block text-sm font-medium text-slate-950">显示 Logo</span>
-          <span className="mt-1 block text-sm leading-6 text-slate-500">默认开启，用于验证品牌合成位置。</span>
+          <span className="block text-sm font-medium text-slate-950">显示品牌 Logo</span>
+          <span className="mt-1 block text-sm leading-6 text-slate-500">建议保留，有助于保持远方品牌统一。</span>
         </span>
       </label>
       <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">
