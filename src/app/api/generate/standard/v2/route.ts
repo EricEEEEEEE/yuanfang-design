@@ -5,15 +5,10 @@ import sharp from "sharp";
 import { BRAND } from "@/config/brand";
 import type { FinalBrandLayerAsset } from "@/models/final-composer";
 import type { StandardGenerationInput } from "@/models/standard-generation";
-import type {
-  StandardFormV2ProductOutputType,
-  StandardGenerateV2ErrorCode,
-  StandardGenerateV2Request,
-  StandardGenerateV2Response,
-} from "@/models/standard-generation-api-v2";
+import type { StandardFormV2ProductOutputType, StandardGenerateV2Diagnostics, StandardGenerateV2ErrorCode, StandardGenerateV2GeneratedBackgroundDiagnostics, StandardGenerateV2Request, StandardGenerateV2Response } from "@/models/standard-generation-api-v2";
 import { generateStandardPoster } from "@/use-cases/generate-standard-poster.use-case";
+import { resolveStandardV2Background } from "./background";
 import { backgroundFallbackCode, buildV2Diagnostics } from "./diagnostics";
-import { createFormV2DebugBackgroundAsset } from "./fixtures";
 
 export const runtime = "nodejs";
 
@@ -40,18 +35,18 @@ export async function POST(request: Request): Promise<Response> {
     const validation = validateRequest(parsed);
     if (!validation.ok) return failure(requestId, validation.status, validation.code, validation.message);
     const body = validation.body;
-    const mode = body.background?.mode ?? "debugFixture";
-    if (mode !== "debugFixture") return failure(requestId, 400, "unsupported_background_mode");
     if (body.options?.includeCampusInfo === true) return failure(requestId, 400, "campus_info_not_supported");
 
-    const backgroundAsset = await createFormV2DebugBackgroundAsset(CANVAS);
+    const background = await resolveStandardV2Background(body, CANVAS);
+    if (!background.ok) return failure(requestId, background.status, background.code, background.message, background.diagnostics);
     const assetWarnings: string[] = [];
     const brandAssets = await prepareBrandAssets(body, assetWarnings);
-    const { input, summary } = await toGenerationInput(body, backgroundAsset, brandAssets);
+    const { input, summary } = await toGenerationInput(body, background.backgroundAsset, brandAssets);
+    const mappedSummary = { ...summary, backgroundMode: background.mode, backgroundSource: background.backgroundAsset.source, backgroundPromptHash: background.generatedBackground?.promptHash, backgroundModelUsed: background.generatedBackground?.modelUsed };
     const result = await generateStandardPoster(input);
     const code = resultErrorCode(result);
     const ok = !code;
-    return Response.json(mapResult(requestId, result, assetWarnings, summary, body, ok, code), { status: ok ? 200 : 422 });
+    return Response.json(mapResult(requestId, result, [...assetWarnings, ...background.warnings], mappedSummary, body, ok, code, background.generatedBackground), { status: ok ? 200 : 422 });
   } catch {
     return failure(requestId, 500, "internal_error");
   }
@@ -137,13 +132,13 @@ async function readBrandAsset(path: string, width: number, placementPolicy: Fina
   }
 }
 
-function mapResult(requestId: string, result: Awaited<ReturnType<typeof generateStandardPoster>>, assetWarnings: string[], summary: Record<string, unknown>, body: StandardGenerateV2Request, ok: boolean, code?: StandardGenerateV2ErrorCode): StandardGenerateV2Response {
+function mapResult(requestId: string, result: Awaited<ReturnType<typeof generateStandardPoster>>, assetWarnings: string[], summary: Record<string, unknown>, body: StandardGenerateV2Request, ok: boolean, code?: StandardGenerateV2ErrorCode, generatedBackground?: StandardGenerateV2GeneratedBackgroundDiagnostics): StandardGenerateV2Response {
   return {
     ok,
     source: "standard-api-v2",
     requestId,
     ...(result.output ? { output: { mimeType: "image/jpeg", base64: result.output.input.toString("base64"), width: result.output.width, height: result.output.height, sha256: result.output.sha256, byteLength: result.output.byteLength } } : {}),
-    diagnostics: buildV2Diagnostics(result, assetWarnings, summary, body),
+    diagnostics: buildV2Diagnostics(result, assetWarnings, summary, body, generatedBackground),
     safety: { passed: result.safety.passed, codes: result.safety.checks.map((item) => `${item.code}:${item.passed ? "PASS" : "FAIL"}`) },
     ...(code ? { error: errorPayload(code, result.reason) } : {}),
     reason: result.reason,
@@ -156,8 +151,8 @@ function resultErrorCode(result: Awaited<ReturnType<typeof generateStandardPoste
   return result.output ? "generation_fail_closed" : "no_output";
 }
 
-function failure(requestId: string, status: number, code: StandardGenerateV2ErrorCode, message?: string): Response {
-  const response: StandardGenerateV2Response = { ok: false, source: "standard-api-v2", requestId, error: errorPayload(code, message), reason: message ?? errorInfo(code).message };
+function failure(requestId: string, status: number, code: StandardGenerateV2ErrorCode, message?: string, diagnostics?: StandardGenerateV2Diagnostics): Response {
+  const response: StandardGenerateV2Response = { ok: false, source: "standard-api-v2", requestId, ...(diagnostics ? { diagnostics } : {}), error: errorPayload(code, message), reason: message ?? errorInfo(code).message };
   return Response.json(response, { status });
 }
 
@@ -172,8 +167,14 @@ function errorInfo(code: StandardGenerateV2ErrorCode): { message: string; userMe
     event_brief_too_short: ["form.eventBrief must be 10-300 characters.", "请补充活动或课程内容。"],
     style_brief_too_short: ["form.styleBrief must be 4-200 characters.", "请补充画面感觉。"],
     avoid_notes_too_long: ["form.avoidNotes is too long.", "请缩短不希望出现的内容。"],
-    unsupported_background_mode: ["Only debugFixture background is supported in Standard API v2.", "当前仅支持测试背景。"],
+    unsupported_background_mode: ["Requested background mode is not supported in Standard API v2.", "当前暂不支持这种背景模式。"],
     campus_info_not_supported: ["campusInfoAsset is not supported in Standard API v2.", "当前暂不支持校区信息叠加。"],
+    prompt_build_failed: ["Generated background prompt build failed.", "背景生成准备失败，请调整描述后重试。"],
+    background_generation_failed: ["Generated background image failed.", "背景生成失败，请调整描述后重试。"],
+    background_image_empty: ["Generated background image is empty.", "背景生成失败，请稍后重试。"],
+    background_image_invalid: ["Generated background image is invalid.", "背景图片处理失败，请稍后重试。"],
+    background_image_normalize_failed: ["Generated background normalization failed.", "背景图片规格化失败，请稍后重试。"],
+    unknown_background_generation_error: ["Generated background failed unexpectedly.", "背景生成暂时不可用，请稍后重试。"],
     generation_fail_closed: ["Standard API v2 generation failed closed.", "生成未通过安全检查，请调整描述后重试。"],
     no_output: ["Standard API v2 produced no output.", "本次未生成海报，请稍后重试。"],
     openai_api_key_missing: ["OPENAI_API_KEY missing.", "系统生成配置未完成。"],

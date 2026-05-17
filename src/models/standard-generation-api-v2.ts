@@ -57,7 +57,7 @@ export type StandardGenerateV2Output = {
 export type StandardGenerateV2FieldConsumption = "consumed" | "partially_consumed" | "diagnostic_only";
 
 export type StandardGenerateV2ProductQualityDiagnostics = {
-  outputQualityMode: "debug_fixture_smoke" | "product_quality_candidate";
+  outputQualityMode: "debug_fixture_smoke" | "generated_background_candidate" | "product_quality_candidate";
   backgroundMode: StandardFormV2Background["mode"];
   backgroundLimitation: string;
   formFieldConsumption: {
@@ -100,6 +100,20 @@ export type StandardGenerateV2ProductQualityDiagnostics = {
   warnings: string[];
 };
 
+export type StandardGenerateV2GeneratedBackgroundDiagnostics = {
+  source?: "standard-background-generation-v1";
+  promptHash?: string;
+  modelUsed?: string;
+  byteLength?: number;
+  sha256?: string;
+  originalDimensions?: { width?: number; height?: number };
+  normalizedDimensions?: { width: number; height: number };
+  warnings?: string[];
+  safetyCodes?: string[];
+  errorCode?: string;
+  errorMessage?: string;
+};
+
 export type StandardGenerateV2Diagnostics = {
   selectedCandidateId?: string;
   selectedSourceCandidateId?: string;
@@ -108,6 +122,7 @@ export type StandardGenerateV2Diagnostics = {
   backgroundLayoutSource?: string;
   formMappingSummary?: Record<string, unknown>;
   productQualityDiagnostics?: StandardGenerateV2ProductQualityDiagnostics;
+  generatedBackground?: StandardGenerateV2GeneratedBackgroundDiagnostics;
   warnings?: string[];
 };
 
@@ -127,6 +142,12 @@ export type StandardGenerateV2ErrorCode =
   | "avoid_notes_too_long"
   | "unsupported_background_mode"
   | "campus_info_not_supported"
+  | "prompt_build_failed"
+  | "background_generation_failed"
+  | "background_image_empty"
+  | "background_image_invalid"
+  | "background_image_normalize_failed"
+  | "unknown_background_generation_error"
   | "generation_fail_closed"
   | "no_output"
   | "openai_api_key_missing"

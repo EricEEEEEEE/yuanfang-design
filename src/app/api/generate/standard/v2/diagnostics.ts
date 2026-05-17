@@ -1,5 +1,6 @@
 import type {
   StandardGenerateV2Diagnostics,
+  StandardGenerateV2GeneratedBackgroundDiagnostics,
   StandardGenerateV2ProductQualityDiagnostics,
   StandardGenerateV2Request,
 } from "@/models/standard-generation-api-v2";
@@ -13,6 +14,7 @@ export function buildV2Diagnostics(
   assetWarnings: string[],
   formMappingSummary: Record<string, unknown>,
   request: StandardGenerateV2Request,
+  generatedBackground?: StandardGenerateV2GeneratedBackgroundDiagnostics,
 ): StandardGenerateV2Diagnostics {
   const layout = result.titleCandidatePipelineResult?.candidateResult.spatialStrategy.backgroundLayout;
   return {
@@ -22,7 +24,8 @@ export function buildV2Diagnostics(
     spatialSource: result.diagnostics.spatialStrategySource,
     backgroundLayoutSource: layout?.source,
     formMappingSummary,
-    productQualityDiagnostics: buildProductQualityDiagnostics(result, formMappingSummary, request),
+    productQualityDiagnostics: buildProductQualityDiagnostics(result, formMappingSummary, request, generatedBackground),
+    ...(generatedBackground ? { generatedBackground } : {}),
     warnings: [...assetWarnings, ...result.warnings],
   };
 }
@@ -35,22 +38,26 @@ function buildProductQualityDiagnostics(
   result: StandardPosterResult,
   summary: Record<string, unknown>,
   request: StandardGenerateV2Request,
+  generatedBackground?: StandardGenerateV2GeneratedBackgroundDiagnostics,
 ): StandardGenerateV2ProductQualityDiagnostics {
   const mode = request.background?.mode ?? "debugFixture";
   const strategy = result.titleCandidatePipelineResult?.candidateResult.spatialStrategy;
   const hook = detectVisualHook(request);
-  const backgroundCanReflectTheme = mode !== "debugFixture";
+  const generatedReady = mode === "generated" && generatedBackground?.source === "standard-background-generation-v1" && !generatedBackground.errorCode;
+  const backgroundCanReflectTheme = generatedReady;
   const warnings = [
     ...(backgroundCanReflectTheme ? [] : ["当前使用固定测试背景，背景不会根据活动内容、四大名著、国风、人物、书籍等描述生成主题画面。"]),
+    ...(generatedReady ? ["当前 generated background 已根据 brief 生成背景候选，但仍需产品质量 QA，不代表 production-ready。"] : []),
+    ...(generatedBackground?.warnings ?? []),
     ...(hook.possibleMismatch && hook.mismatchReason ? [hook.mismatchReason] : []),
   ];
 
   return {
-    outputQualityMode: mode === "debugFixture" ? "debug_fixture_smoke" : "product_quality_candidate",
+    outputQualityMode: mode === "debugFixture" ? "debug_fixture_smoke" : (generatedReady ? "generated_background_candidate" : "product_quality_candidate"),
     backgroundMode: mode,
     backgroundLimitation: mode === "debugFixture"
       ? "debugFixture 是固定 smoke 背景，只验证 API/标题/合成链路，不代表产品视觉质量。"
-      : "背景模式可能承载主题视觉，但当前 route 尚未开放该模式。",
+      : "generated background 会尝试根据 Form v2 brief 生成主题背景候选，但仍需人工 QA 与后续安全评估。",
     formFieldConsumption: {
       productOutputType: "consumed",
       eventBrief: "partially_consumed",
@@ -66,7 +73,7 @@ function buildProductQualityDiagnostics(
       backgroundCanReflectTheme,
       titleCanReflectTheme: true,
       limitationReason: backgroundCanReflectTheme
-        ? "标题与背景均可能承载主题，但当前实现仍需产品质量验证。"
+        ? "背景已由 generated background service 根据 Form v2 brief 生成候选，标题仍由系统标题层渲染。"
         : "Form v2 描述进入 prompt/context，但 debugFixture 背景像素固定，无法表现主题符号。",
     },
     intentDiagnostics: {
@@ -87,7 +94,7 @@ function buildProductQualityDiagnostics(
   };
 }
 
-function detectVisualHook(request: StandardGenerateV2Request): StandardGenerateV2ProductQualityDiagnostics["visualHook"] {
+export function detectVisualHook(request: StandardGenerateV2Request): StandardGenerateV2ProductQualityDiagnostics["visualHook"] {
   const mainTitle = request.title.mainTitle.trim();
   const subtitle = request.title.subtitle?.trim();
   const counts = collectThemeHints(request).map((hint) => ({ hint, count: countInRequest(request, hint), source: hookSource(request, hint) }));

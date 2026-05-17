@@ -40,6 +40,7 @@ async function main(): Promise<void> {
   const sampleCount = parseSampleCount(process.env.STANDARD_API_V2_SAMPLE_COUNT);
   if (sampleCount) await runSampling(sampleCount);
   else await runDefaultSmoke();
+  if (process.env.STANDARD_API_V2_GENERATED_SMOKE === "1") await runGeneratedSmoke();
   console.log("GIT_STATUS_SHORT", gitStatusShort());
 }
 
@@ -53,6 +54,7 @@ async function runDefaultSmoke(): Promise<void> {
   const originalKey = process.env.OPENAI_API_KEY;
   process.env.OPENAI_API_KEY = "";
   const noKey = await callApi(VALID_PAYLOAD);
+  const generatedNoKey = await callApi({ ...QUALITY_PAYLOAD, background: { mode: "generated" } });
   restoreKey(originalKey);
 
   const guards = [
@@ -65,13 +67,15 @@ async function runDefaultSmoke(): Promise<void> {
     ["STANDARD_API_V2_GUARD_INVALID_TITLE_LENGTH", await callApi({ ...VALID_PAYLOAD, title: { mainTitle: "超长超长超长超长超长超长超长超长标题" } }), 400, "invalid_title_length"],
     ["STANDARD_API_V2_GUARD_AVOID_NOTES_TOO_LONG", await callApi({ ...VALID_PAYLOAD, form: { ...VALID_PAYLOAD.form, avoidNotes: "不".repeat(201) } }), 400, "avoid_notes_too_long"],
     ["STANDARD_API_V2_GUARD_CAMPUS_INFO_UNSUPPORTED", await callApi({ ...VALID_PAYLOAD, options: { ...VALID_PAYLOAD.options, includeCampusInfo: true } }), 400, "campus_info_not_supported"],
-    ["STANDARD_API_V2_GUARD_GENERATED_BACKGROUND", await callApi({ ...VALID_PAYLOAD, background: { mode: "generated" } }), 400, "unsupported_background_mode"],
     ["STANDARD_API_V2_GUARD_UPLOADED_BACKGROUND", await callApi({ ...VALID_PAYLOAD, background: { mode: "uploadedImage" } }), 400, "unsupported_background_mode"],
   ] as const;
 
   console.log("STANDARD_API_V2_NO_KEY_STATUS", noKey.status);
   console.log("STANDARD_API_V2_NO_KEY_OK", noKey.body.ok ? "YES" : "NO");
   console.log("STANDARD_API_V2_NO_KEY_OUTPUT", noKey.body.output ? "YES" : "NO");
+  console.log("STANDARD_API_V2_GENERATED_NO_KEY_STATUS", generatedNoKey.status);
+  console.log("STANDARD_API_V2_GENERATED_NO_KEY_ERROR_CODE", generatedNoKey.body.error?.code ?? "none");
+  console.log("STANDARD_API_V2_GENERATED_NO_KEY_OUTPUT", generatedNoKey.body.output ? "YES" : "NO");
   for (const [label, result, status, code] of guards) console.log(label, guard(result, status, code));
   console.log("STANDARD_API_V2_OLD_COMPOSE_ISOLATION", "PASS");
 
@@ -79,8 +83,18 @@ async function runDefaultSmoke(): Promise<void> {
     ? valid.status === 200 && valid.body.ok && valid.body.output?.mimeType === "image/jpeg" && valid.body.output.byteLength > 0
     : valid.status === 422 && !valid.body.ok && !valid.body.output;
   const noKeyOk = noKey.status === 422 && !noKey.body.ok && !noKey.body.output;
+  const generatedNoKeyOk = generatedNoKey.status === 422 && !generatedNoKey.body.ok && !generatedNoKey.body.output && generatedNoKey.body.error?.code === "openai_api_key_missing";
   const guardsOk = guards.every(([, result, status, code]) => guard(result, status, code) === "PASS");
-  if (!validOk || !noKeyOk || !guardsOk) process.exitCode = 1;
+  if (!validOk || !noKeyOk || !generatedNoKeyOk || !guardsOk) process.exitCode = 1;
+}
+
+async function runGeneratedSmoke(): Promise<void> {
+  if (!process.env.OPENAI_API_KEY) { console.log("STANDARD_API_V2_GENERATED_SMOKE_SKIPPED", "NO_KEY"); process.exitCode = 1; return; }
+  const result = await callApi({ ...QUALITY_PAYLOAD, background: { mode: "generated" } });
+  const bg = result.body.diagnostics?.generatedBackground;
+  const q = result.body.diagnostics?.productQualityDiagnostics;
+  for (const [label, value] of [["STANDARD_API_V2_GENERATED_SMOKE_STATUS", result.status], ["STANDARD_API_V2_GENERATED_SMOKE_OK", result.body.ok ? "YES" : "NO"], ["STANDARD_API_V2_GENERATED_SMOKE_POSTER_STATUS", posterStatus(result)], ["STANDARD_API_V2_GENERATED_SMOKE_BACKGROUND_MODE", q?.backgroundMode ?? "none"], ["STANDARD_API_V2_GENERATED_SMOKE_BACKGROUND_CAN_REFLECT_THEME", q?.semanticAlignment.backgroundCanReflectTheme ? "YES" : "NO"], ["STANDARD_API_V2_GENERATED_SMOKE_BACKGROUND_SOURCE", bg?.source ?? "none"], ["STANDARD_API_V2_GENERATED_SMOKE_BACKGROUND_BYTES", bg?.byteLength ?? 0], ["STANDARD_API_V2_GENERATED_SMOKE_MODEL_USED", bg?.modelUsed ?? "none"], ["STANDARD_API_V2_GENERATED_SMOKE_PROMPT_HASH", bg?.promptHash ?? "none"], ["STANDARD_API_V2_GENERATED_SMOKE_NO_FALLBACK", q?.backgroundMode === "generated" && bg?.source === "standard-background-generation-v1" ? "PASS" : "FAIL"]]) console.log(label, value);
+  if (!(result.status === 200 && result.body.ok && result.body.output && q?.backgroundMode === "generated" && q.semanticAlignment.backgroundCanReflectTheme && bg?.source === "standard-background-generation-v1")) process.exitCode = 1;
 }
 
 async function runSampling(total: number): Promise<void> {
