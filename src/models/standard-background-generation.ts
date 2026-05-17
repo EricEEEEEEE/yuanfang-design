@@ -75,8 +75,9 @@ export type GeneratedBackgroundAsset = {
   input: Buffer;
   width: number;
   height: number;
-  mimeType: "image/png" | "image/jpeg";
+  mimeType: "image/jpeg" | "image/png";
   sha256: string;
+  byteLength?: number;
   promptHash?: string;
   modelUsed?: string;
   diagnostics?: Record<string, unknown>;
@@ -93,16 +94,43 @@ export type BackgroundGenerationInput = {
   failClosed: true;
 };
 
+export type BackgroundGenerationErrorCode =
+  | "prompt_build_failed"
+  | "openai_api_key_missing"
+  | "background_generation_failed"
+  | "background_image_empty"
+  | "background_image_invalid"
+  | "background_image_normalize_failed"
+  | "unknown_background_generation_error";
+
+export type BackgroundGenerationError = {
+  code: BackgroundGenerationErrorCode;
+  message: string;
+};
+
+export type BackgroundGenerationDiagnostics = {
+  promptHash?: string;
+  promptLength?: number;
+  negativePromptLength?: number;
+  modelUsed?: string;
+  sourceByteLength?: number;
+  normalizedByteLength?: number;
+  originalDimensions?: { width?: number; height?: number };
+  normalizedDimensions?: { width: number; height: number };
+  visualHook?: string;
+  consumedFields?: string[];
+  warnings?: string[];
+  safetyCodes?: string[];
+};
+
 export type BackgroundGenerationResult = {
   ok: boolean;
   source: "standard-background-generation-v1";
   backgroundAsset?: GeneratedBackgroundAsset;
   promptBuildResult?: StandardBackgroundPromptBuildResult;
-  error?: {
-    code: "prompt_build_failed" | "image_generation_failed" | "image_result_empty";
-    message: string;
-  };
-  warnings: string[];
+  diagnostics?: BackgroundGenerationDiagnostics;
+  error?: BackgroundGenerationError;
+  warnings?: string[];
 };
 
 export type StandardBackgroundPromptIntent = {
