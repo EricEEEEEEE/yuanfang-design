@@ -16,7 +16,7 @@ export function StandardOptionsPanel({
       <div>
         <h2 className="text-base font-semibold text-slate-950">品牌元素</h2>
         <p className="mt-1 text-sm leading-6 text-slate-500">
-          当前仍是 v2 预览，固定测试背景用于验证表单到合成链路。
+          当前仍是 v2 预览，品牌元素仅用于内部测试，不代表正式生产效果。
         </p>
       </div>
       <label className="flex items-start gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3">

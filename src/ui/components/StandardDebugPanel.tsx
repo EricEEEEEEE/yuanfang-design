@@ -6,12 +6,20 @@ type StandardDebugPanelProps = {
 
 export function StandardDebugPanel({ response }: StandardDebugPanelProps) {
   const formMapping = response.diagnostics?.formMappingSummary;
+  const productQuality = response.diagnostics?.productQualityDiagnostics;
+  const generatedBackground = response.diagnostics?.generatedBackground;
   const items = [
     { label: "requestId", value: response.requestId },
     { label: "reason", value: response.reason },
     { label: "errorCode", value: response.error?.code || "-" },
     { label: "safety", value: response.safety?.codes.join(", ") || "-" },
     { label: "warnings", value: response.diagnostics?.warnings?.join(", ") || "-" },
+    { label: "backgroundMode", value: String(productQuality?.backgroundMode ?? formMapping?.backgroundMode ?? "-") },
+    { label: "backgroundSource", value: String(formMapping?.backgroundSource ?? generatedBackground?.source ?? "-") },
+    {
+      label: "backgroundCanReflectTheme",
+      value: productQuality ? (productQuality.semanticAlignment.backgroundCanReflectTheme ? "YES" : "NO") : "-",
+    },
     { label: "productOutputType", value: String(formMapping?.productOutputType ?? "-") },
     { label: "designFamily", value: String(formMapping?.designFamily ?? "-") },
     { label: "sceneKey", value: String(formMapping?.sceneKey ?? "-") },

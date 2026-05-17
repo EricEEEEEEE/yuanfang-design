@@ -65,7 +65,7 @@ function buildRequest(values: StandardFormV2Values): StandardGenerateV2Request {
       ...(optionalText(values.subtitle) ? { subtitle: values.subtitle.trim() } : {}),
       ...(emphasisWords(values.titleEmphasisWords) ? { titleEmphasisWords: emphasisWords(values.titleEmphasisWords) } : {}),
     },
-    background: { mode: "debugFixture" },
+    background: { mode: values.backgroundMode },
     options: {
       includeLogo: values.includeLogo,
       includeMascot: values.includeMascot,

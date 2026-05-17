@@ -1,13 +1,17 @@
 import type { FormEvent } from "react";
 import type { StandardFormV2ProductOutputType } from "@/models/standard-generation-api-v2";
+import { StandardBackgroundModeSelector } from "@/ui/components/StandardBackgroundModeSelector";
 import { StandardFormTextarea } from "@/ui/components/StandardFormField";
 import { StandardInspirationCards } from "@/ui/components/StandardInspirationCards";
 import { StandardOptionsPanel } from "@/ui/components/StandardOptionsPanel";
 import { StandardProductTypeSelector } from "@/ui/components/StandardProductTypeSelector";
 import { StandardTitleFields } from "@/ui/components/StandardTitleFields";
 
+export type StandardBackgroundMode = "debugFixture" | "generated";
+
 export type StandardFormV2Values = {
   productOutputType: StandardFormV2ProductOutputType;
+  backgroundMode: StandardBackgroundMode;
   eventBrief: string;
   styleBrief: string;
   visualDetails: string;
@@ -25,6 +29,7 @@ export type StandardSubmitState = "idle" | "submitting" | "success" | "validatio
 
 export const initialStandardFormV2Values: StandardFormV2Values = {
   productOutputType: "achievementShowcase",
+  backgroundMode: "debugFixture",
   eventBrief: "",
   styleBrief: "",
   visualDetails: "",
@@ -72,6 +77,11 @@ export function StandardFormV2({
       </p>
 
       <StandardInspirationCards onApply={applyInspiration} values={values} />
+
+      <StandardBackgroundModeSelector
+        onChange={(value) => onChange("backgroundMode", value)}
+        value={values.backgroundMode}
+      />
 
       <StandardProductTypeSelector
         error={errors.productOutputType}
