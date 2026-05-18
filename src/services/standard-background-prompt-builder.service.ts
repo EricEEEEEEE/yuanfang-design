@@ -1,42 +1,10 @@
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { STANDARD_DESIGN_FAMILIES, type StandardDesignFamilyKey } from "@/config/design-families";
+import { STANDARD_DESIGN_FAMILIES } from "@/config/design-families";
 import { STANDARD_DISPLAY_POLICIES } from "@/config/display-policies";
-import { STANDARD_LAYOUT_FAMILIES, type StandardLayoutFamilyKey } from "@/config/layout-families";
+import { STANDARD_LAYOUT_FAMILIES } from "@/config/layout-families";
 import type { StandardBackgroundPromptBuildInput, StandardBackgroundPromptBuildResult, StandardImagePromptContext } from "@/models/standard-background-generation";
-
-type BaseTemplate = { basePrompt: string; layoutPrompt: string; negativePrompt: string[] };
-type BrandRulesTemplate = {
-  brandName: string; englishName: string; brandSpirit: string[]; colors: Record<string, string>;
-  visualLanguage: string[]; allowedVisualMotifs: string[]; logoRules: string[]; mascotRules: string[];
-};
-type FragmentMap = Record<string, { label?: string; purpose?: string; prompt: string }>;
-type TemplateKeys = { designFamily: StandardDesignFamilyKey; layoutFamily: StandardLayoutFamilyKey; displayPolicy: string; theme: string; style: string; element: string };
-
-const PROMPT_VERSION = "standard-background-prompt-v1";
-const TEMPLATE_SOURCES = [
-  "docs/STANDARD_PROMPT_LANGUAGE_V2.md",
-  "templates/_base.json",
-  "templates/_brand-rules.json",
-  "templates/standard/themes.json",
-  "templates/standard/styles.json",
-  "templates/standard/elements.json",
-];
-const FORBIDDEN_ELEMENTS = [
-  "readable text", "Chinese title text", "English title text", "fake Chinese characters",
-  "logo", "Yuanfang logo", "mascot", "QR code", "campus phone", "address", "watermark",
-];
-const PRODUCT_LABELS = { achievementShowcase: "成果展示图", enrollment: "招生宣传图", festival: "节日活动图", classReview: "课堂回顾图", parentNotice: "家长通知图", socialPost: "朋友圈传播图" };
-const BENCHMARK_STANDARD = "Yuanfang education-brand key visual benchmark: thematic campaign background, strong primary visual hook, rich controlled visual density framing protected safe zones, clear title-safe zone, clear logo-safe zone, professional brand material quality, not generic AI art.";
-const BENCHMARK_FAMILIES = {
-  enrollment: "Benchmark family A: enrollment / open class / literary activity key visual; bright, social-share friendly, course value visible, theme readable at a glance without text.",
-  achievementShowcase: "Benchmark family B: achievement showcase / report class key visual; stage light, works wall, growth path, ceremony, parent witness feeling.",
-  festival: "Benchmark family C: festival / poetry / modern Chinese culture key visual; scrolls, seasonal symbols, literary atmosphere, modern not old-fashioned.",
-  classReview: "Benchmark family B: achievement showcase / class review key visual; works wall, classroom outcome space, warm spotlight, growth evidence.",
-  parentNotice: "Benchmark family D: brand / notice key visual; structured brand blocks, clean hierarchy, strong safe zones, not empty template.",
-  socialPost: "Benchmark family D: company activity / launch / brand event key visual; launch-stage energy, brand color motion, strong visual impact.",
-};
+import { BENCHMARK_FAMILIES, BENCHMARK_STANDARD, FORBIDDEN_ELEMENTS, PRODUCT_LABELS, PROMPT_VERSION, TEMPLATE_SOURCES } from "@/services/helpers/standard-background-prompt-policy";
+import { type BaseTemplate, loadTemplates, type TemplateKeys } from "@/services/helpers/standard-background-prompt-templates";
+import { allBriefText, buildWarnings, consumedFields, formatPalette, hasAny, sha256, splitAvoidNotes, unique } from "@/services/helpers/standard-background-prompt-utils";
 
 export function buildStandardBackgroundPrompt(
   input: StandardBackgroundPromptBuildInput,
@@ -159,40 +127,3 @@ function resolveTemplateKeys(context: StandardImagePromptContext): TemplateKeys 
   if (context.form.productOutputType === "enrollment") return { designFamily: "educationGrowth", layoutFamily: "classicTop", displayPolicy: "titleOnlyDefault", theme: "recruitment", style: "warm", element: "books" };
   return { designFamily: "literaryEditorial", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "literary", element: "books" };
 }
-
-function loadTemplates() {
-  return {
-    base: loadJson<BaseTemplate>("templates/_base.json"),
-    brand: loadJson<BrandRulesTemplate>("templates/_brand-rules.json"),
-    themes: loadJson<FragmentMap>("templates/standard/themes.json"),
-    styles: loadJson<FragmentMap>("templates/standard/styles.json"),
-    elements: loadJson<FragmentMap>("templates/standard/elements.json"),
-  };
-}
-
-function loadJson<T>(relativePath: string): T { return JSON.parse(readFileSync(join(process.cwd(), relativePath), "utf8")) as T; }
-
-function buildWarnings(context: StandardImagePromptContext): string[] {
-  return [
-    ...(context.outputIntent.backgroundOnly ? [] : ["outputIntent must remain backgroundOnly."]),
-    ...(context.visualHook?.possibleMismatch && context.visualHook.mismatchReason ? [context.visualHook.mismatchReason] : []),
-  ];
-}
-
-function consumedFields(context: StandardImagePromptContext): string[] {
-  return ["productOutputType", "eventBrief", "styleBrief", "visualDetails", "titleBrief", "avoidNotes", "mainTitle", "subtitle", ...(context.visualHook?.primaryHook ? ["visualHook"] : [])];
-}
-
-function allBriefText(context: StandardImagePromptContext): string {
-  return [context.visualHook?.primaryHook, context.form.eventBrief, context.form.styleBrief, context.form.visualDetails, context.form.titleBrief, context.form.avoidNotes].filter(Boolean).join(" ");
-}
-
-function hasAny(value: string, needles: string[]): boolean { return needles.some((needle) => value.includes(needle)); }
-
-function splitAvoidNotes(value: string): string[] { return value.split(/[，,;；、\n]/).map((item) => item.trim()).filter(Boolean).slice(0, 12); }
-
-function unique(values: string[]): string[] { return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean))); }
-
-function formatPalette(colors: Record<string, string>): string { return Object.entries(colors).map(([key, value]) => `${key} ${value}`).join(", "); }
-
-function sha256(value: string): string { return createHash("sha256").update(value).digest("hex"); }
