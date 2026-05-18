@@ -55,6 +55,16 @@ const FESTIVAL = context({
   subtitle: "文学节日活动",
   hook: "诗词",
 });
+const BRAND_EVENT = context({
+  productOutputType: "socialPost",
+  eventBrief: "花开远方发布新课程体系升级，面向校区老师和家长展示品牌活动与课程发布。",
+  styleBrief: "需要有发布会、品牌升级、课程体系焕新的感觉，视觉冲击强但仍然专业。",
+  visualDetails: "品牌色动线、发布会舞台光、课程模块、深蓝和橙红色块、清晰标题区。",
+  titleBrief: "突出品牌升级与课程发布。",
+  mainTitle: "花开远方发布会",
+  subtitle: "新课程体系升级",
+  hook: "品牌升级与课程发布",
+});
 const AVOID_STRESS = context({
   productOutputType: "socialPost",
   eventBrief: "发布一张阅读活动朋友圈图，提醒家长带孩子参与文学体验。",
@@ -70,16 +80,27 @@ function main() {
   const four = buildStandardBackgroundPrompt({ promptContext: FOUR_CLASSICS });
   const achievement = buildStandardBackgroundPrompt({ promptContext: ACHIEVEMENT });
   const festival = buildStandardBackgroundPrompt({ promptContext: FESTIVAL });
+  const brandEvent = buildStandardBackgroundPrompt({ promptContext: BRAND_EVENT });
   const avoid = buildStandardBackgroundPrompt({ promptContext: AVOID_STRESS });
   const checks = [
+    ["STANDARD_BACKGROUND_BENCHMARK_LANGUAGE_CHECK", hasAll(four.prompt, ["Yuanfang education-brand key visual benchmark", "visual density", "primary visual hook", "title-safe", "logo-safe"])],
+    ["STANDARD_BACKGROUND_SAFE_ZONE_PROTECTION_CHECK", hasAll(four.prompt, ["protected center or upper-center vertical title-safe column", "low-complexity", "central protected title column", "Do not place detailed objects"])],
     ["STANDARD_BACKGROUND_FOUR_CLASSICS_THEME_CHECK", hasAll(four.prompt, ["四大名著", "书籍", "国风"])],
     ["STANDARD_BACKGROUND_NO_TEXT_POLICY_CHECK", hasAll(four.prompt, ["Background visual only", "not a final poster", "Do not generate readable", "Do not generate title"])],
     ["STANDARD_BACKGROUND_NO_LOGO_POLICY_CHECK", hasAll(four.prompt, ["Do not generate logo", "Logo is composited later"])],
     ["STANDARD_BACKGROUND_NO_CAMPUS_POLICY_CHECK", hasAll(four.prompt, ["campus phone", "Campus information is composited later"])],
     ["STANDARD_BACKGROUND_NEGATIVE_PROMPT_CHECK", hasAll(four.negativePrompt, ["readable text", "fake Chinese characters", "QR code", "phone number", "address"])],
+    ["STANDARD_BACKGROUND_GENERIC_AI_ART_GUARD_CHECK", hasAll(four.negativePrompt, ["generic AI art", "blank placeholder", "empty gradient background", "weak primary visual hook"])],
     ["STANDARD_BACKGROUND_ACHIEVEMENT_CHECK", hasAll(achievement.prompt, ["阅读成果", "作品墙", "舞台光"])],
     ["STANDARD_BACKGROUND_FESTIVAL_CHECK", hasAll(festival.prompt, ["诗词", "节日", "书卷"])],
+    ["STANDARD_BACKGROUND_BRAND_EVENT_CHECK", hasAll(brandEvent.prompt, ["发布会", "品牌升级", "brand event", "brand color"])],
     ["STANDARD_BACKGROUND_AVOID_STRESS_CHECK", hasAll(avoid.negativePrompt, ["真实照片", "日漫", "水印", "二维码", "廉价广告"])],
+  ];
+  const qa = [
+    ["fourClassicsEnrollment", qualitySummary(four.prompt, four.negativePrompt)],
+    ["achievementShowcase", qualitySummary(achievement.prompt, achievement.negativePrompt)],
+    ["festivalPoetry", qualitySummary(festival.prompt, festival.negativePrompt)],
+    ["brandEventLaunch", qualitySummary(brandEvent.prompt, brandEvent.negativePrompt)],
   ];
 
   console.log("STANDARD_BACKGROUND_PROMPT_SOURCE", four.source);
@@ -91,6 +112,7 @@ function main() {
   console.log("STANDARD_BACKGROUND_CONSUMED_FIELDS", JSON.stringify(four.promptDiagnostics.consumedFields));
   console.log("STANDARD_BACKGROUND_TEMPLATE_SOURCES", JSON.stringify(four.promptDiagnostics.usedTemplateSources));
   console.log("STANDARD_BACKGROUND_FORBIDDEN_ELEMENTS", JSON.stringify(four.promptDiagnostics.forbiddenGeneratedElements));
+  console.log("STANDARD_BACKGROUND_BENCHMARK_SAMPLE_QA", JSON.stringify(qa));
   for (const [label, passed] of checks) console.log(label, passed ? "PASS" : "FAIL");
   console.log("STANDARD_BACKGROUND_WARNINGS", JSON.stringify(four.promptDiagnostics.warnings));
   console.log("GIT_STATUS_SHORT", JSON.stringify(gitStatus()));
@@ -128,6 +150,22 @@ function context(input: {
 
 function hasAll(value: string, needles: string[]): boolean {
   return needles.every((needle) => value.includes(needle));
+}
+
+function qualitySummary(prompt: string, negativePrompt: string): Record<string, string> {
+  return {
+    themeVisible: pass(prompt, ["primary visual hook", "Main visual theme anchor"]),
+    designDensity: pass(prompt, ["visual density", "3-5 controlled layers"]),
+    yuanfangBrand: pass(prompt, ["Yuanfang", "brand color", "education-brand"]),
+    titleSafe: pass(prompt, ["vertical title-safe column", "45%-55%", "low-complexity"]),
+    logoSafe: pass(prompt, ["logo-safe", "top-right"]),
+    noTextPolicy: pass(prompt + negativePrompt, ["Do not generate readable", "fake Chinese characters"]),
+    genericGuard: pass(negativePrompt, ["generic AI art", "blank placeholder"]),
+  };
+}
+
+function pass(value: string, needles: string[]): string {
+  return hasAll(value, needles) ? "PASS" : "CHECK";
 }
 
 function gitStatus(): string {

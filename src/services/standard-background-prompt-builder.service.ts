@@ -28,6 +28,15 @@ const FORBIDDEN_ELEMENTS = [
   "logo", "Yuanfang logo", "mascot", "QR code", "campus phone", "address", "watermark",
 ];
 const PRODUCT_LABELS = { achievementShowcase: "成果展示图", enrollment: "招生宣传图", festival: "节日活动图", classReview: "课堂回顾图", parentNotice: "家长通知图", socialPost: "朋友圈传播图" };
+const BENCHMARK_STANDARD = "Yuanfang education-brand key visual benchmark: thematic campaign background, strong primary visual hook, rich controlled visual density framing protected safe zones, clear title-safe zone, clear logo-safe zone, professional brand material quality, not generic AI art.";
+const BENCHMARK_FAMILIES = {
+  enrollment: "Benchmark family A: enrollment / open class / literary activity key visual; bright, social-share friendly, course value visible, theme readable at a glance without text.",
+  achievementShowcase: "Benchmark family B: achievement showcase / report class key visual; stage light, works wall, growth path, ceremony, parent witness feeling.",
+  festival: "Benchmark family C: festival / poetry / modern Chinese culture key visual; scrolls, seasonal symbols, literary atmosphere, modern not old-fashioned.",
+  classReview: "Benchmark family B: achievement showcase / class review key visual; works wall, classroom outcome space, warm spotlight, growth evidence.",
+  parentNotice: "Benchmark family D: brand / notice key visual; structured brand blocks, clean hierarchy, strong safe zones, not empty template.",
+  socialPost: "Benchmark family D: company activity / launch / brand event key visual; launch-stage energy, brand color motion, strong visual impact.",
+};
 
 export function buildStandardBackgroundPrompt(
   input: StandardBackgroundPromptBuildInput,
@@ -70,9 +79,12 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
   return [
     "Background visual only, not a final poster.",
     "Create a professional education-brand poster background for Yuanfang Standard Form v2.",
+    BENCHMARK_STANDARD,
+    BENCHMARK_FAMILIES[context.form.productOutputType],
     "Do not generate readable Chinese text. Do not generate title text. Do not generate logo. Do not generate mascot.",
     "Do not generate QR code, campus phone, address, name, watermark, or any contact information.",
-    "Leave clear low-complexity area for the system-rendered title asset and leave a logo safe area.",
+    "Reserve a large protected center or upper-center vertical title-safe column covering about 45%-55% of the canvas with calm low-complexity layered light, paper depth, brand color block, or gentle texture; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it.",
+    "Reserve a clean logo-safe zone near the top-right with low detail and high contrast. Do not place detailed objects behind the future logo. Keep official logo, mascot, QR, and campus information for later compositing.",
     context.constraints.reserveMascotSpace ? "Leave optional small mascot compositing space, but do not generate the mascot." : "",
     context.constraints.reserveCampusInfoSpace ? "Leave optional information compositing space, but do not generate campus text." : "",
     "",
@@ -110,9 +122,12 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     element ? `Element guidance: ${element.prompt}` : "",
     "",
     "Visual translation requirements:",
+    "Design density: use 3-5 controlled layers around outer edges, lower third, and secondary zones, such as foreground theme symbols, mid-ground campaign space, background light/motion, brand color accents, and safe-zone structure.",
+    "Primary visual hook: make the visualHook or strongest brief phrase drive the largest non-text visual motif as a side/lower framing element outside the protected title-safe and logo-safe zones, not just a small decoration.",
     "Extract 2-4 unique memory points from eventBrief, styleBrief, visualDetails, and visualHook.",
     "Translate them into background composition, symbolic objects, depth, light, material, and movement.",
-    "Keep theme visuals memorable but controlled; avoid clutter and excessive text-like patterns.",
+    "Match the benchmark family instead of making a generic illustration, stock education poster, blank gradient, or decorative wallpaper.",
+    "Keep theme visuals memorable but controlled; keep detailed objects outside the central protected title column and logo-safe zone; avoid clutter and excessive text-like patterns.",
     "Reserved areas must have subtle texture, light, paper depth, or low-complexity structure, not blank filler.",
     templates.base.layoutPrompt,
   ].filter(Boolean).join("\n");
@@ -124,6 +139,8 @@ function buildNegativePrompt(context: StandardImagePromptContext, base: BaseTemp
     "readable text", "fake Chinese characters", "title text", "fake logo", "fake mascot",
     "QR code", "phone number", "address", "watermark", "cheap advertisement look",
     "cluttered layout", "low quality", "dark oppressive tone", "raw campus info",
+    "generic AI art", "blank placeholder", "empty gradient background", "stock illustration",
+    "decorative wallpaper without theme", "weak primary visual hook", "unsafe logo area", "detailed objects inside title-safe zone", "central high-detail subject", "high detail behind logo",
     ...(context.avoidNotes ? splitAvoidNotes(context.avoidNotes) : []),
     ...(context.form.avoidNotes ? splitAvoidNotes(context.form.avoidNotes) : []),
   ]).join("\n");
@@ -132,9 +149,11 @@ function buildNegativePrompt(context: StandardImagePromptContext, base: BaseTemp
 function resolveTemplateKeys(context: StandardImagePromptContext): TemplateKeys {
   const text = allBriefText(context);
   const classical = hasAny(text, ["四大名著", "国学", "诗词", "名著", "传统", "古典"]);
+  const launch = hasAny(text, ["发布会", "品牌升级", "课程发布", "周年", "公司活动", "发布"]);
   const festival = context.form.productOutputType === "festival";
   const showcase = context.form.productOutputType === "achievementShowcase" || context.form.productOutputType === "classReview";
-  if (classical) return { designFamily: "modernChinese", layoutFamily: "bottomTitle", displayPolicy: "titleOnlyDefault", theme: "classicalLiterature", style: "chinese", element: "classicalPoetry" };
+  if (launch) return { designFamily: "businessLaunch", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "literary", element: "books" };
+  if (classical) return { designFamily: "modernChinese", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "classicalLiterature", style: "chinese", element: "classicalPoetry" };
   if (showcase) return { designFamily: "achievementShowcase", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "showcase", style: "warm", element: "books" };
   if (festival) return { designFamily: "ipCartoonEvent", layoutFamily: "eventPoster", displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "lively", element: "childrenReading" };
   if (context.form.productOutputType === "enrollment") return { designFamily: "educationGrowth", layoutFamily: "classicTop", displayPolicy: "titleOnlyDefault", theme: "recruitment", style: "warm", element: "books" };
