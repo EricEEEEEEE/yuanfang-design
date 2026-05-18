@@ -71,10 +71,14 @@ export type StandardGenerateV2ProductQualityDiagnostics = {
   };
   visualHook: {
     detectedPrimaryHook?: string;
-    source: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "manual" | "none";
+    detectedPrimaryMessage?: string;
+    source: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "visualDetails" | "manual" | "none";
+    hookSource?: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "visualDetails" | "manual" | "none";
     mainTitle: string;
     subtitle?: string;
     possibleMismatch: boolean;
+    mainTitleMismatch?: boolean;
+    titleHierarchyRisk?: "none" | "medium" | "high";
     mismatchReason?: string;
   };
   semanticAlignment: {

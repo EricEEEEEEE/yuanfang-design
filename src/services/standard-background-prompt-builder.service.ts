@@ -83,7 +83,7 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     BENCHMARK_FAMILIES[context.form.productOutputType],
     "Do not generate readable Chinese text. Do not generate title text. Do not generate logo. Do not generate mascot.",
     "Do not generate QR code, campus phone, address, name, watermark, or any contact information.",
-    "Reserve a large protected center or upper-center vertical title-safe column covering about 45%-55% of the canvas with calm low-complexity layered light, paper depth, brand color block, or gentle texture; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it.",
+    "Reserve a large continuous protected center or upper-center vertical title-safe column covering about 45%-55% of the canvas, visually obvious for downstream layout analysis, with calm low-complexity layered light, paper depth, brand color block, or gentle texture; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it.",
     "Reserve a clean logo-safe zone near the top-right with low detail and high contrast. Do not place detailed objects behind the future logo. Keep official logo, mascot, QR, and campus information for later compositing.",
     context.constraints.reserveMascotSpace ? "Leave optional small mascot compositing space, but do not generate the mascot." : "",
     context.constraints.reserveCampusInfoSpace ? "Leave optional information compositing space, but do not generate campus text." : "",
@@ -140,7 +140,7 @@ function buildNegativePrompt(context: StandardImagePromptContext, base: BaseTemp
     "QR code", "phone number", "address", "watermark", "cheap advertisement look",
     "cluttered layout", "low quality", "dark oppressive tone", "raw campus info",
     "generic AI art", "blank placeholder", "empty gradient background", "stock illustration",
-    "decorative wallpaper without theme", "weak primary visual hook", "unsafe logo area", "detailed objects inside title-safe zone", "central high-detail subject", "high detail behind logo",
+    "decorative wallpaper without theme", "weak primary visual hook", "unsafe logo area", "unclear title-safe zone", "detailed objects inside title-safe zone", "central high-detail subject", "high detail behind logo",
     ...(context.avoidNotes ? splitAvoidNotes(context.avoidNotes) : []),
     ...(context.form.avoidNotes ? splitAvoidNotes(context.form.avoidNotes) : []),
   ]).join("\n");

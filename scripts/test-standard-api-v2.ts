@@ -158,8 +158,11 @@ function printQuality(prefix: string, result: ApiResult): void {
   console.log(`${prefix}_BACKGROUND_MODE`, q?.backgroundMode ?? "none");
   console.log(`${prefix}_BACKGROUND_CAN_REFLECT_THEME`, q?.semanticAlignment.backgroundCanReflectTheme ? "YES" : "NO");
   console.log(`${prefix}_VISUAL_HOOK`, q?.visualHook.detectedPrimaryHook ?? "none");
+  console.log(`${prefix}_DETECTED_PRIMARY_MESSAGE`, q?.visualHook.detectedPrimaryMessage ?? "none");
   console.log(`${prefix}_VISUAL_HOOK_SOURCE`, q?.visualHook.source ?? "none");
+  console.log(`${prefix}_VISUAL_HOOK_HOOK_SOURCE`, q?.visualHook.hookSource ?? "none");
   console.log(`${prefix}_VISUAL_HOOK_MISMATCH`, q?.visualHook.possibleMismatch ? "YES" : "NO");
+  console.log(`${prefix}_TITLE_HIERARCHY_RISK`, q?.visualHook.titleHierarchyRisk ?? "none");
   console.log(`${prefix}_FORM_FIELD_CONSUMPTION`, JSON.stringify(q?.formFieldConsumption ?? null));
   console.log(`${prefix}_PRODUCT_QUALITY_WARNINGS`, JSON.stringify(q?.warnings ?? []));
 }

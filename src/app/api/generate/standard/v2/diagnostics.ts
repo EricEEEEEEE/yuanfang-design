@@ -7,7 +7,14 @@ import type {
 import type { generateStandardPoster } from "@/use-cases/generate-standard-poster.use-case";
 
 type StandardPosterResult = Awaited<ReturnType<typeof generateStandardPoster>>;
-const THEME_HINTS = ["四大名著", "名著", "文学", "阅读", "书籍", "人物", "国风", "高级感", "招生", "暑期", "体验课", "体验营", "成长", "汇报课"];
+type VisualHookDiagnostics = StandardGenerateV2ProductQualityDiagnostics["visualHook"];
+type VisualHookSource = VisualHookDiagnostics["source"];
+type VisualHookCandidate = { phrase: string; source: VisualHookSource; score: number };
+const SOURCE_WEIGHTS: Record<string, number> = { titleBrief: 78, subtitle: 60, eventBrief: 34, visualDetails: 30, mainTitle: 8 };
+const GENERIC_HOOK_PHRASES = [
+  "活动", "课程", "海报", "标题", "副标题", "主标题", "整体", "画面", "宣传", "招生", "公开课", "体验课", "体验营",
+  "希望", "需要", "能够", "不要", "家长", "孩子", "老师", "学生", "感觉", "氛围", "主题", "内容",
+];
 
 export function buildV2Diagnostics(
   result: StandardPosterResult,
@@ -46,7 +53,7 @@ function buildProductQualityDiagnostics(
   const generatedReady = mode === "generated" && generatedBackground?.source === "standard-background-generation-v1" && !generatedBackground.errorCode;
   const backgroundCanReflectTheme = generatedReady;
   const warnings = [
-    ...(backgroundCanReflectTheme ? [] : ["当前使用固定测试背景，背景不会根据活动内容、四大名著、国风、人物、书籍等描述生成主题画面。"]),
+    ...(backgroundCanReflectTheme ? [] : ["当前使用固定测试背景，背景不会根据用户描述中的传播重点、主题符号和活动气质生成主题画面。"]),
     ...(generatedReady ? ["当前 generated background 已根据 brief 生成背景候选，但仍需产品质量 QA，不代表 production-ready。"] : []),
     ...(generatedBackground?.warnings ?? []),
     ...(hook.possibleMismatch && hook.mismatchReason ? [hook.mismatchReason] : []),
@@ -94,42 +101,76 @@ function buildProductQualityDiagnostics(
   };
 }
 
-export function detectVisualHook(request: StandardGenerateV2Request): StandardGenerateV2ProductQualityDiagnostics["visualHook"] {
+export function detectVisualHook(request: StandardGenerateV2Request): VisualHookDiagnostics {
   const mainTitle = request.title.mainTitle.trim();
   const subtitle = request.title.subtitle?.trim();
-  const counts = collectThemeHints(request).map((hint) => ({ hint, count: countInRequest(request, hint), source: hookSource(request, hint) }));
-  const candidate = counts.filter((item) => !mainTitle.includes(item.hint)).sort((left, right) => scoreHint(right) - scoreHint(left))[0];
-  const detectedPrimaryHook = candidate?.hint || mainTitle || undefined;
-  const possibleMismatch = Boolean(candidate && candidate.count >= 2);
+  const candidate = collectPrimaryMessageCandidates(request)[0];
+  const detectedPrimaryHook = candidate?.phrase || mainTitle || undefined;
+  const mainTitleMismatch = Boolean(detectedPrimaryHook && mainTitle && detectedPrimaryHook !== mainTitle && !mainTitle.includes(detectedPrimaryHook));
+  const titleHierarchyRisk = mainTitleMismatch ? (candidate?.source === "subtitle" ? "medium" : "high") : "none";
   return {
     detectedPrimaryHook,
+    detectedPrimaryMessage: detectedPrimaryHook,
     source: candidate?.source ?? (mainTitle ? "mainTitle" : "none"),
+    hookSource: candidate?.source ?? (mainTitle ? "mainTitle" : "none"),
     mainTitle,
     ...(subtitle ? { subtitle } : {}),
-    possibleMismatch,
-    ...(possibleMismatch ? { mismatchReason: `用户描述中“${candidate!.hint}”多次出现，但 mainTitle 是“${mainTitle}”；当前标题系统主要围绕 mainTitle 构图，可能导致传播重点弱化。` } : {}),
+    possibleMismatch: mainTitleMismatch,
+    mainTitleMismatch,
+    titleHierarchyRisk,
+    ...(mainTitleMismatch ? { mismatchReason: `检测到传播重点可能是“${detectedPrimaryHook}”，但 mainTitle 是“${mainTitle}”；标题层级应保留 mainTitle 原文，同时增强 subtitle/hook 的视觉存在感。` } : {}),
   };
 }
 
 function collectThemeHints(request: StandardGenerateV2Request): string[] {
-  const text = allRequestText(request);
-  return THEME_HINTS.filter((hint) => text.includes(hint));
+  return collectPrimaryMessageCandidates(request).slice(0, 6).map((candidate) => candidate.phrase);
+}
+
+function collectPrimaryMessageCandidates(request: StandardGenerateV2Request): VisualHookCandidate[] {
+  const mainTitle = request.title.mainTitle.trim();
+  const fields: Array<[VisualHookSource, string | undefined]> = [
+    ["subtitle", request.title.subtitle],
+    ["titleBrief", request.form.titleBrief],
+    ["eventBrief", request.form.eventBrief],
+    ["visualDetails", request.form.visualDetails],
+    ["mainTitle", request.title.mainTitle],
+  ];
+  const candidates = new Map<string, VisualHookCandidate>();
+  for (const [source, value] of fields) {
+    for (const phrase of extractHookPhrases(value)) {
+      if (isWeakHookPhrase(phrase, mainTitle)) continue;
+      const score = (SOURCE_WEIGHTS[source] ?? 1) + countInRequest(request, phrase) * 10 + Math.min(phrase.length, 16);
+      const previous = candidates.get(phrase);
+      candidates.set(phrase, { phrase, source: previous && previous.score > score ? previous.source : source, score: (previous?.score ?? 0) + score });
+    }
+  }
+  return [...candidates.values()].sort((left, right) => right.score - left.score);
+}
+
+function extractHookPhrases(value: string | undefined): string[] {
+  if (!value) return [];
+  const chunks = value.split(/[，。；、,;：:\n]/).map(cleanHookPhrase).filter(Boolean);
+  const emphasized = value.match(/(?:突出|强调|主打|围绕|展示|体现|表现|感受|看见|看到|了解|知道)([^，。；、,;：:\n]{2,24})/g) ?? [];
+  return [...new Set([...chunks, ...emphasized.map(cleanHookPhrase)])];
+}
+
+function cleanHookPhrase(value: string): string {
+  return value
+    .replace(/(?:突出|强调|主打|围绕|展示|体现|表现|感受|看见|看到|了解|知道|希望|需要|能够|整体|画面|海报|标题|让家长|让孩子|通过|我们)/g, "")
+    .replace(/[“”"'《》\s]/g, "")
+    .replace(/(四个字|这些字|这个词|这种感觉|那种感觉|感觉|氛围|内容|主题|课程|体验营|体验课|公开课|活动|宣传|海报|体验)$/g, "")
+    .trim();
+}
+
+function isWeakHookPhrase(phrase: string, mainTitle: string): boolean {
+  if (phrase.length < 2 || phrase.length > 16) return true;
+  if (!/[\p{Script=Han}A-Za-z0-9]/u.test(phrase)) return true;
+  if (phrase === mainTitle) return true;
+  return GENERIC_HOOK_PHRASES.includes(phrase);
 }
 
 function countInRequest(request: StandardGenerateV2Request, hint: string): number {
   return allRequestText(request).split(hint).length - 1;
-}
-
-function scoreHint(item: { hint: string; count: number }): number {
-  return item.count * item.hint.length;
-}
-
-function hookSource(request: StandardGenerateV2Request, hint: string): StandardGenerateV2ProductQualityDiagnostics["visualHook"]["source"] {
-  if (request.title.subtitle?.includes(hint)) return "subtitle";
-  if (request.form.titleBrief.includes(hint)) return "titleBrief";
-  if (request.form.eventBrief.includes(hint)) return "eventBrief";
-  if (request.title.mainTitle.includes(hint)) return "mainTitle";
-  return "none";
 }
 
 function allRequestText(request: StandardGenerateV2Request): string {

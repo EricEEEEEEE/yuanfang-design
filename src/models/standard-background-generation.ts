@@ -12,8 +12,12 @@ export type StandardImagePromptContext = {
   title: StandardFormV2TitleInput;
   visualHook?: {
     primaryHook?: string;
-    source?: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "manual" | "none";
+    primaryMessage?: string;
+    source?: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "visualDetails" | "manual" | "none";
+    hookSource?: "mainTitle" | "subtitle" | "titleBrief" | "eventBrief" | "visualDetails" | "manual" | "none";
     possibleMismatch?: boolean;
+    mainTitleMismatch?: boolean;
+    titleHierarchyRisk?: "none" | "medium" | "high";
     mismatchReason?: string;
   };
   brand: {
