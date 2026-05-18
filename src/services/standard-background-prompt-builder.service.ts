@@ -2,6 +2,8 @@ import { STANDARD_DESIGN_FAMILIES } from "@/config/design-families";
 import { STANDARD_DISPLAY_POLICIES } from "@/config/display-policies";
 import { STANDARD_LAYOUT_FAMILIES } from "@/config/layout-families";
 import type { StandardBackgroundPromptBuildInput, StandardBackgroundPromptBuildResult, StandardImagePromptContext } from "@/models/standard-background-generation";
+import type { YuanfangLayoutGrammarKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
+import { buildStandardBackgroundVisualRuleContext, type StandardBackgroundVisualRuleContext } from "@/services/helpers/standard-background-visual-rule-adapter";
 import { BENCHMARK_FAMILIES, BENCHMARK_STANDARD, FORBIDDEN_ELEMENTS, PRODUCT_LABELS, PROMPT_VERSION, TEMPLATE_SOURCES } from "@/services/helpers/standard-background-prompt-policy";
 import { type BaseTemplate, loadTemplates, type TemplateKeys } from "@/services/helpers/standard-background-prompt-templates";
 import { allBriefText, buildWarnings, consumedFields, formatPalette, hasAny, sha256, splitAvoidNotes, unique } from "@/services/helpers/standard-background-prompt-utils";
@@ -11,9 +13,10 @@ export function buildStandardBackgroundPrompt(
 ): StandardBackgroundPromptBuildResult {
   const context = input.promptContext;
   const templates = loadTemplates();
-  const keys = resolveTemplateKeys(context);
-  const prompt = buildPrompt(context, templates, keys);
-  const negativePrompt = buildNegativePrompt(context, templates.base);
+  const visualRules = buildStandardBackgroundVisualRuleContext(context);
+  const keys = resolveTemplateKeys(context, visualRules);
+  const prompt = buildPrompt(context, templates, keys, visualRules);
+  const negativePrompt = buildNegativePrompt(context, templates.base, visualRules);
   const warnings = buildWarnings(context);
   const promptHash = sha256(`${prompt}\n---NEGATIVE---\n${negativePrompt}`);
 
@@ -27,8 +30,19 @@ export function buildStandardBackgroundPrompt(
       promptHash,
       consumedFields: consumedFields(context),
       usedBrandRules: ["brandSpirit", "colors", "visualLanguage", "allowedVisualMotifs", "logoRules", "mascotRules"],
-      usedTemplateSources: [...TEMPLATE_SOURCES, "src/config/design-families.ts", "src/config/layout-families.ts", "src/config/display-policies.ts"],
+      usedTemplateSources: [...TEMPLATE_SOURCES, "src/config/design-families.ts", "src/config/layout-families.ts", "src/config/display-policies.ts", "src/config/yuanfang-design-rules.ts", "src/config/yuanfang-visual-benchmark.ts", "src/config/yuanfang-visual-grammar.ts"],
       visualHook: context.visualHook,
+      visualRules: {
+        source: visualRules.source,
+        selectedBenchmarkFamily: visualRules.selectedBenchmarkFamily,
+        selectedLayoutGrammar: visualRules.selectedLayoutGrammar,
+        visualDensityTarget: visualRules.visualDensityTarget,
+        titleSafePolicy: visualRules.titleSafePolicy,
+        logoSafePolicy: visualRules.logoSafePolicy,
+        consumedRuleKeys: visualRules.consumedRuleKeys,
+        negativeRuleKeys: visualRules.negativeRuleKeys,
+        layoutSelectionReason: visualRules.layoutSelectionReason,
+      },
       backgroundOnly: true,
       forbiddenGeneratedElements: FORBIDDEN_ELEMENTS,
       warnings,
@@ -36,7 +50,7 @@ export function buildStandardBackgroundPrompt(
   };
 }
 
-function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<typeof loadTemplates>, keys: TemplateKeys): string {
+function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<typeof loadTemplates>, keys: TemplateKeys, visualRules: StandardBackgroundVisualRuleContext): string {
   const design = STANDARD_DESIGN_FAMILIES[keys.designFamily];
   const layout = STANDARD_LAYOUT_FAMILIES[keys.layoutFamily];
   const display = STANDARD_DISPLAY_POLICIES[keys.displayPolicy] ?? STANDARD_DISPLAY_POLICIES.titleOnlyDefault;
@@ -51,8 +65,9 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     BENCHMARK_FAMILIES[context.form.productOutputType],
     "Do not generate readable Chinese text. Do not generate title text. Do not generate logo. Do not generate mascot.",
     "Do not generate QR code, campus phone, address, name, watermark, or any contact information.",
-    "Reserve a large continuous protected center or upper-center vertical title-safe column covering about 45%-55% of the canvas, visually obvious for downstream layout analysis, with calm low-complexity layered light, paper depth, brand color block, or gentle texture; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it.",
-    "Reserve a clean logo-safe zone near the top-right with low detail and high contrast. Do not place detailed objects behind the future logo. Keep official logo, mascot, QR, and campus information for later compositing.",
+    "Use the selected L2 layout grammar below; do not default to a center blank board, small center text zone, or lower-only decorative pile.",
+    "Reserve a designed title-safe zone according to the selected layout grammar: low-complexity, continuous, easy for downstream layout analysis, with calm layered light, paper depth, brand color block, or gentle texture; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it.",
+    "Reserve a clean logo-safe zone near the top-right with low detail and high contrast for the full future logo group. Do not place detailed objects behind the future logo. Keep official logo, mascot, QR, and campus information for later compositing.",
     context.constraints.reserveMascotSpace ? "Leave optional small mascot compositing space, but do not generate the mascot." : "",
     context.constraints.reserveCampusInfoSpace ? "Leave optional information compositing space, but do not generate campus text." : "",
     "",
@@ -80,6 +95,8 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     `- mascot policy: ${context.brand.mascotPolicy}`,
     `- campus policy: ${context.brand.campusPolicy}`,
     "",
+    ...visualRules.promptLines,
+    "",
     "Template and design direction:",
     templates.base.basePrompt,
     `Design family: ${design.label}. ${design.prompt}`,
@@ -90,40 +107,61 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     element ? `Element guidance: ${element.prompt}` : "",
     "",
     "Visual translation requirements:",
-    "Design density: use 3-5 controlled layers around outer edges, lower third, and secondary zones, such as foreground theme symbols, mid-ground campaign space, background light/motion, brand color accents, and safe-zone structure.",
-    "Primary visual hook: make the visualHook or strongest brief phrase drive the largest non-text visual motif as a side/lower framing element outside the protected title-safe and logo-safe zones, not just a small decoration.",
+    "Design density: use 3-5 controlled layers according to the selected layout grammar, such as foreground theme symbols, mid-ground campaign space, background light/motion, brand color accents, and safe-zone structure.",
+    "Primary visual hook: make the visualHook or strongest brief phrase drive the largest non-text visual motif in the selected visual subject placement, not just a small decoration.",
     "Extract 2-4 unique memory points from eventBrief, styleBrief, visualDetails, and visualHook.",
     "Translate them into background composition, symbolic objects, depth, light, material, and movement.",
     "Match the benchmark family instead of making a generic illustration, stock education poster, blank gradient, or decorative wallpaper.",
-    "Keep theme visuals memorable but controlled; keep detailed objects outside the central protected title column and logo-safe zone; avoid clutter and excessive text-like patterns.",
-    "Reserved areas must have subtle texture, light, paper depth, or low-complexity structure, not blank filler.",
+    "Keep theme visuals memorable but controlled; keep detailed objects outside the selected title-safe zone and logo-safe zone; avoid clutter and excessive text-like patterns.",
+    "Reserved areas must have subtle texture, light, paper depth, color structure, or low-complexity design intent, not blank filler or an empty placeholder board.",
     templates.base.layoutPrompt,
   ].filter(Boolean).join("\n");
 }
 
-function buildNegativePrompt(context: StandardImagePromptContext, base: BaseTemplate): string {
+function buildNegativePrompt(context: StandardImagePromptContext, base: BaseTemplate, visualRules: StandardBackgroundVisualRuleContext): string {
   return unique([
     ...base.negativePrompt,
-    "readable text", "fake Chinese characters", "title text", "fake logo", "fake mascot",
-    "QR code", "phone number", "address", "watermark", "cheap advertisement look",
+    ...visualRules.negativePromptPhrases,
+    "readable text", "fake Chinese characters", "title text", "fake logo", "fake mascot", "generated mascot",
+    "QR code", "phone number", "campus phone", "address", "campus address", "watermark", "cheap advertisement look",
     "cluttered layout", "low quality", "dark oppressive tone", "raw campus info",
-    "generic AI art", "blank placeholder", "empty gradient background", "stock illustration",
-    "decorative wallpaper without theme", "weak primary visual hook", "unsafe logo area", "unclear title-safe zone", "detailed objects inside title-safe zone", "central high-detail subject", "high detail behind logo",
+    "generic AI art", "blank placeholder", "blank board", "empty gradient background", "stock illustration",
+    "decorative wallpaper without theme", "weak primary visual hook", "unsafe logo area", "unclear title-safe zone", "overblank title zone", "overcrowded title zone", "text-like patterns near title/logo zones", "small center text", "detailed objects inside title-safe zone", "central high-detail subject", "high detail behind logo",
     ...(context.avoidNotes ? splitAvoidNotes(context.avoidNotes) : []),
     ...(context.form.avoidNotes ? splitAvoidNotes(context.form.avoidNotes) : []),
   ]).join("\n");
 }
 
-function resolveTemplateKeys(context: StandardImagePromptContext): TemplateKeys {
+function resolveTemplateKeys(context: StandardImagePromptContext, visualRules: StandardBackgroundVisualRuleContext): TemplateKeys {
   const text = allBriefText(context);
+  const designFamily = designFamilyFor(visualRules.selectedBenchmarkFamily);
+  const layoutFamily = layoutFamilyFor(visualRules.selectedLayoutGrammar);
   const classical = hasAny(text, ["四大名著", "国学", "诗词", "名著", "传统", "古典"]);
   const launch = hasAny(text, ["发布会", "品牌升级", "课程发布", "周年", "公司活动", "发布"]);
   const festival = context.form.productOutputType === "festival";
   const showcase = context.form.productOutputType === "achievementShowcase" || context.form.productOutputType === "classReview";
-  if (launch) return { designFamily: "businessLaunch", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "literary", element: "books" };
-  if (classical) return { designFamily: "modernChinese", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "classicalLiterature", style: "chinese", element: "classicalPoetry" };
-  if (showcase) return { designFamily: "achievementShowcase", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "showcase", style: "warm", element: "books" };
-  if (festival) return { designFamily: "ipCartoonEvent", layoutFamily: "eventPoster", displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "lively", element: "childrenReading" };
-  if (context.form.productOutputType === "enrollment") return { designFamily: "educationGrowth", layoutFamily: "classicTop", displayPolicy: "titleOnlyDefault", theme: "recruitment", style: "warm", element: "books" };
-  return { designFamily: "literaryEditorial", layoutFamily: "centerTitle", displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "literary", element: "books" };
+  if (launch) return { designFamily, layoutFamily, displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "literary", element: "books" };
+  if (classical) return { designFamily, layoutFamily, displayPolicy: "titleOnlyDefault", theme: "classicalLiterature", style: "chinese", element: "classicalPoetry" };
+  if (showcase) return { designFamily, layoutFamily, displayPolicy: "titleOnlyDefault", theme: "showcase", style: "warm", element: "books" };
+  if (festival) return { designFamily, layoutFamily, displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "lively", element: "childrenReading" };
+  if (context.form.productOutputType === "enrollment") return { designFamily, layoutFamily, displayPolicy: "titleOnlyDefault", theme: "recruitment", style: "warm", element: "books" };
+  return { designFamily, layoutFamily, displayPolicy: "titleOnlyDefault", theme: "readingFestival", style: "literary", element: "books" };
+}
+
+function designFamilyFor(family: YuanfangVisualFamilyKey): TemplateKeys["designFamily"] {
+  if (family === "brandEvent" || family === "companyActivity") return "businessLaunch";
+  if (family === "enrollment") return "boldCampaign";
+  if (family === "openClass") return "educationGrowth";
+  if (family === "literaryActivity") return "literaryEditorial";
+  if (family === "guofengLiterature" || family === "poetryFestival") return "modernChinese";
+  if (family === "achievementShowcase" || family === "teachingCompetition" || family === "campusActivity") return "achievementShowcase";
+  return "literaryEditorial";
+}
+
+function layoutFamilyFor(layout: YuanfangLayoutGrammarKey): TemplateKeys["layoutFamily"] {
+  if (layout === "topHeroTitle") return "classicTop";
+  if (layout === "leftTitleRightVisual" || layout === "rightTitleLeftVisual" || layout === "verticalSealTitle") return "sideTitle";
+  if (layout === "bottomInformationPanel") return "bottomTitle";
+  if (layout === "centerHeroLockup" || layout === "stageShowcase") return "centerTitle";
+  return "eventPoster";
 }
