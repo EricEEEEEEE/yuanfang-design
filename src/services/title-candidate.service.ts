@@ -29,6 +29,7 @@ import {
   type TitleOrientationPreference,
   type TitleSpatialStrategyMode,
 } from "@/services/spatial-strategy-planner.service";
+import type { TitleHierarchyContext } from "@/models/title-hierarchy-context";
 
 export type TitleCandidateUnitRole =
   | "lead"
@@ -109,6 +110,7 @@ export type GenerateTitleCandidatesInput = {
   styleBrief?: string;
   visualDetails?: string;
   avoidNotes?: string;
+  titleHierarchyContext?: TitleHierarchyContext;
 };
 
 export type GenerateTitleCandidatesResult = {
@@ -121,6 +123,7 @@ export type GenerateTitleCandidatesResult = {
   candidates: TitleCandidate[];
   reason: string;
   spatialStrategy: SpatialStrategy;
+  titleHierarchyContext?: TitleHierarchyContext;
 };
 
 type PatternSummary = {
@@ -364,6 +367,7 @@ export async function generateTitleCandidates(
       candidates,
       reason: "AI generated validated structured lockupDrafts; system completed TitleLockupBlueprints.",
       spatialStrategy,
+      titleHierarchyContext: input.titleHierarchyContext,
     };
   } catch (error) {
     return fallback(
@@ -443,6 +447,7 @@ function buildUserPrompt(
     `styleBrief: ${input.styleBrief || "未填写"}`,
     `visualDetails: ${input.visualDetails || "未填写"}`,
     `avoidNotes: ${input.avoidNotes || "未填写"}`,
+    ...titleHierarchyPromptLines(input.titleHierarchyContext),
     "【Spatial Strategy】",
     `contentIntent: ${spatialStrategy.contentIntent}`,
     `strategyMode: ${spatialStrategy.strategyMode}`,
@@ -588,6 +593,26 @@ function getReferencePatternSummaries(keys: readonly TitleReferencePatternKey[])
       templateRiskWarning: pattern.templateRiskWarning,
     };
   });
+}
+
+function titleHierarchyPromptLines(context: TitleHierarchyContext | undefined): string[] {
+  if (!context) return [];
+  return [
+    "【Title Hierarchy Context】",
+    `primaryMessage: ${context.primaryMessage || "none"}`,
+    `hookSource: ${context.hookSource}`,
+    `mainTitleMismatch: ${context.mainTitleMismatch ? "YES" : "NO"}`,
+    `titleHierarchyRisk: ${context.titleHierarchyRisk}`,
+    `hierarchyIntent: ${context.hierarchyIntent}`,
+    `recommendedSubtitlePriority: ${context.recommendedSubtitlePriority}`,
+    `titleEmphasisWords: ${context.titleEmphasisWords?.join(" / ") || "none"}`,
+    `allowedVisibleText: ${context.visibleTextPolicy.allowedVisibleText.join(" / ") || "none"}`,
+    "primaryMessage is hierarchy guidance only; it is not permission to create new visible title text.",
+    "Preserve mainTitle exactly. Preserve subtitle text exactly when subtitle is rendered.",
+    "If primaryMessage is not in allowedVisibleText, use it only for semantic rhythm/pattern reasoning and never render it as text.",
+    "If primaryMessage appears in subtitle, keep subtitle visually present when spatial safety allows; mainTitle still remains the primary title.",
+    ...context.warnings.map((warning) => `hierarchyWarning: ${warning}`),
+  ];
 }
 
 function getSemanticSplitSummaries(candidates: readonly TitleSemanticSplitCandidate[]): Array<{
@@ -2493,6 +2518,7 @@ function fallback(
     candidates,
     reason: fallbackResult.reason,
     spatialStrategy,
+    titleHierarchyContext: input.titleHierarchyContext,
   };
 }
 
@@ -2622,6 +2648,7 @@ function buildBlueprintFromDraftAndPlan(
     grammar.subtitlePlacementPolicy,
     titleUnits,
     spatialStrategy,
+    input.titleHierarchyContext,
   );
   const spatialContract = {
     spatialAnchorId: anchor.id,
@@ -2712,6 +2739,7 @@ function createLockupBlueprint(params: {
     grammar.subtitlePlacementPolicy,
     titleUnits,
     params.spatialStrategy,
+    params.input.titleHierarchyContext,
   );
   const spatialContract = {
     spatialAnchorId: params.anchor.id,
@@ -3208,6 +3236,7 @@ function buildSubtitleLockup(
   placementPolicy: TitleSubtitlePlacementPolicy,
   titleUnits: readonly TitleLockupUnit[],
   spatialStrategy: SpatialStrategy,
+  hierarchyContext?: TitleHierarchyContext,
 ): TitleLockupBlueprint["subtitleLockup"] {
   if (!subtitle) {
     return hiddenSubtitleLockup();
@@ -3229,9 +3258,15 @@ function buildSubtitleLockup(
     text: subtitle,
     placementPolicy: subtitlePlacement.placementPolicy,
     subtitleBox: subtitlePlacement.subtitleBox,
-    visualWeight: 1.4,
+    visualWeight: subtitleVisualWeight(hierarchyContext),
     readingOrder: 99,
   };
+}
+
+function subtitleVisualWeight(context: TitleHierarchyContext | undefined): number {
+  if (context?.recommendedSubtitlePriority === "strong") return 1.75;
+  if (context?.recommendedSubtitlePriority === "preserveIfSafe") return 1.55;
+  return 1.4;
 }
 
 function hiddenSubtitleLockup(text = ""): TitleLockupBlueprint["subtitleLockup"] {

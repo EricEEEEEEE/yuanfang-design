@@ -106,6 +106,7 @@ function buildTitlePipelineInput(input: StandardGenerationInput): GenerateScored
     styleBrief: input.request.styleBrief ?? "明亮、有仪式感、有成果感，也要专业可信。",
     visualDetails: input.request.visualDetails ?? keywordText,
     avoidNotes: input.request.avoidNotes ?? "不要生成文字、不要生成 logo、不要生成二维码。",
+    titleHierarchyContext: input.request.titleHierarchyContext,
   };
 }
 

@@ -9,6 +9,7 @@ import type {
   GenerateScoredRefinedTitleCandidatesInput,
   GenerateScoredRefinedTitleCandidatesResult,
 } from "@/use-cases/generate-scored-refined-title-candidates.use-case";
+import type { TitleHierarchyContext } from "@/models/title-hierarchy-context";
 
 export type StandardGenerationSource = "standard-generation-integration-v1";
 
@@ -31,6 +32,7 @@ export type StandardGenerationRequest = {
   styleBrief?: string;
   visualDetails?: string;
   avoidNotes?: string;
+  titleHierarchyContext?: TitleHierarchyContext;
 };
 
 export type StandardGenerationCandidateStrategy =

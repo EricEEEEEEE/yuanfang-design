@@ -9,6 +9,7 @@ import type { StandardFormV2ProductOutputType, StandardGenerateV2Diagnostics, St
 import { generateStandardPoster } from "@/use-cases/generate-standard-poster.use-case";
 import { resolveStandardV2Background } from "./background";
 import { backgroundFallbackCode, buildV2Diagnostics } from "./diagnostics";
+import { buildTitleHierarchyContext } from "./title-hierarchy";
 
 export const runtime = "nodejs";
 
@@ -97,6 +98,7 @@ async function toGenerationInput(body: StandardGenerateV2Request, backgroundAsse
     styleBrief: emphasis.length ? `${text(form.styleBrief)}；标题重点词：${emphasis.join("、")}` : text(form.styleBrief),
     visualDetails: text(form.visualDetails),
     avoidNotes: [text(form.avoidNotes), "不要生成文字、不要生成 logo、不要生成二维码。"].filter(Boolean).join("；"),
+    titleHierarchyContext: buildTitleHierarchyContext(body),
   };
   const input: StandardGenerationInput = {
     canvas: CANVAS,

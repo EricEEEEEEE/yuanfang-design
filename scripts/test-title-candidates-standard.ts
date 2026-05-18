@@ -1,8 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { TitleLockupBlueprint } from "../src/config/title-lockup-blueprint";
+import type { TitleHierarchyContext } from "../src/models/title-hierarchy-context";
 import { generateTitleCandidates } from "../src/services/title-candidate.service";
 
 const BACKGROUND_IMAGE_PATH = "/tmp/yuanfang-title-director-bg.jpg";
+const TITLE_CONTEXT: TitleHierarchyContext = { source: "standard-form-v2-primary-message", mainTitle: "成长汇报课", subtitle: "看见孩子的表达力量", primaryMessage: "表达力量", hookSource: "subtitle", mainTitleMismatch: true, titleHierarchyRisk: "medium", titleBrief: "突出孩子表达成长。", titleEmphasisWords: ["成长"], hierarchyIntent: "subtitleHookSupport", recommendedSubtitlePriority: "strong", visibleTextPolicy: { preserveMainTitle: true, noNewTitleText: true, allowedVisibleText: ["成长汇报课", "看见孩子的表达力量"] }, warnings: [] };
 
 async function main(): Promise<void> {
   if (!existsSync(BACKGROUND_IMAGE_PATH)) {
@@ -15,6 +17,7 @@ async function main(): Promise<void> {
     backgroundImageBase64,
     mainTitle: "成长汇报课",
     subtitle: "看见孩子的表达力量",
+    titleHierarchyContext: TITLE_CONTEXT,
     designFamily: "achievementShowcase",
     layoutFamily: "centerTitle",
     displayPolicy: "titleOnlyDefault",
@@ -36,6 +39,9 @@ async function main(): Promise<void> {
     console.error("TITLE_CANDIDATES_COUNT 0 FAIL", result.reason);
   }
   console.error("STRUCTURED_OUTPUT_MODE", result.structuredOutputMode);
+  console.error("TITLE_CONTEXT_PRIMARY", result.titleHierarchyContext?.primaryMessage ?? "none");
+  console.error("TITLE_CONTEXT_INTENT", result.titleHierarchyContext?.hierarchyIntent ?? "none");
+  console.error("TITLE_CONTEXT_SUBTITLE_PRIORITY", result.titleHierarchyContext?.recommendedSubtitlePriority ?? "none");
   console.error("LOCKUP_DRAFT_COUNT", result.lockupDraftCount);
   console.error("LOCKUP_DRAFT_FIELDS", result.lockupDraftFields.join(","));
   console.error(
@@ -126,6 +132,15 @@ async function main(): Promise<void> {
   console.error("PRIMARY_TEXT_ANCHOR", result.spatialStrategy.primaryTextAnchorId);
   console.error("PRIMARY_PATTERNS", result.spatialStrategy.patternPool.primary.join(","));
   console.error("DISALLOWED_PATTERNS", result.spatialStrategy.patternPool.disallowed.join(","));
+  const contextPassed = result.titleHierarchyContext?.primaryMessage === TITLE_CONTEXT.primaryMessage;
+  const mainTitlePreserved = result.lockupBlueprints.every((item) => orderedTitle(item) === item.mainTitle);
+  const noNewText = result.lockupBlueprints.every((item) => visibleTexts(item).every((text) => TITLE_CONTEXT.visibleTextPolicy.allowedVisibleText.includes(text)));
+  const subtitleVisible = result.lockupBlueprints.some((item) => item.subtitleLockup.text === TITLE_CONTEXT.subtitle && item.subtitleLockup.placementPolicy !== "hidden");
+  console.error("TITLE_CONTEXT_PASSED", contextPassed ? "PASS" : "FAIL");
+  console.error("TITLE_CONTEXT_MAIN_TITLE_PRESERVED", mainTitlePreserved ? "PASS" : "FAIL");
+  console.error("TITLE_CONTEXT_NO_NEW_VISIBLE_TEXT", noNewText ? "PASS" : "FAIL");
+  console.error("TITLE_CONTEXT_SUBTITLE_VISIBLE_WHEN_SAFE", subtitleVisible ? "PASS" : "FAIL");
+  if (!contextPassed || !mainTitlePreserved || !noNewText || !subtitleVisible) process.exit(1);
   console.log(JSON.stringify(result, null, 2));
 }
 
@@ -167,4 +182,12 @@ function getBlueprintUnitYSpan(blueprint: TitleLockupBlueprint): number {
 
 function getBlueprintLockupBoxAspect(blueprint: TitleLockupBlueprint): number {
   return Number((blueprint.lockupBox.height / Math.max(1, blueprint.lockupBox.width)).toFixed(2));
+}
+
+function orderedTitle(blueprint: TitleLockupBlueprint): string {
+  return blueprint.titleUnits.slice().sort((a, b) => a.readingOrder - b.readingOrder).map((unit) => unit.text).join("");
+}
+
+function visibleTexts(blueprint: TitleLockupBlueprint): string[] {
+  return [orderedTitle(blueprint), blueprint.subtitleLockup.placementPolicy === "hidden" ? "" : blueprint.subtitleLockup.text].filter(Boolean);
 }
