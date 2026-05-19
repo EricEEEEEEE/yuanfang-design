@@ -46,9 +46,36 @@ export type YuanfangVisualSubjectPlanKey =
   | "techWritingInterfaceAbstraction"
   | "courseValuePath";
 
+export type YuanfangTitleSafeGeometryShape =
+  | "narrowLane"
+  | "compactPanel"
+  | "ribbon"
+  | "cornerField"
+  | "sideBand"
+  | "spotlightPatch"
+  | "editorialMargin";
+
+export type YuanfangTitleSafeGeometry = {
+  maxCanvasAreaRatio: number;
+  preferredAreaRatioRange: [number, number];
+  shape: YuanfangTitleSafeGeometryShape;
+  mustAnchorToVisualSubject: boolean;
+  mustAvoidFullHeightPanel: boolean;
+  mustAvoidFullWidthPanel: boolean;
+  mustKeepBackgroundVisibleAround: boolean;
+  constraintPrompt: string;
+};
+
 export type YuanfangAntiPatternKey =
   | "centerBlankBoard"
   | "overblankTitleZone"
+  | "oversizedTitleSafeBoard"
+  | "fullHeightBlankPanel"
+  | "giantEmptyPlaque"
+  | "emptySpotlightCurtain"
+  | "centralPaperSheetDominance"
+  | "titleSafeAreaOver40Percent"
+  | "disconnectedTitleIsland"
   | "lowerOnlyDecoration"
   | "softPastelSameness"
   | "fakeLogoPatch"
@@ -67,6 +94,7 @@ export type YuanfangDesignDecision = {
   selectedLogoStrategy: YuanfangLogoStrategyKey;
   selectedTitleSafeDesign: YuanfangTitleSafeDesignKey;
   selectedVisualSubjectPlan: YuanfangVisualSubjectPlanKey;
+  titleSafeGeometry: YuanfangTitleSafeGeometry;
   titleSafeDesignPlan: string;
   logoSafeDesign: string;
   colorEnergy: string;

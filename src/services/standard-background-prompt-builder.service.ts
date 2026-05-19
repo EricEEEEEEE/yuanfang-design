@@ -76,7 +76,7 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     "Do not generate readable Chinese text. Do not generate title text. Do not generate logo. Do not generate mascot.",
     "Do not generate QR code, campus phone, address, name, watermark, or any contact information.",
     "Use the selected L2 layout grammar below; avoid centerBlankBoard, tinyFloatingTitle, and lower-only decorative pile patterns.",
-    "Reserve a designed title-safe zone according to the selected layout grammar: low-complexity but visibly designed, continuous, easy for downstream layout analysis, with subtle structure, material, boundary, depth, paper texture, brand color block, or gentle light; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it.",
+    "Reserve a compact designed title-safe zone according to the selected geometry: usually 12%-28% canvas area, stage zones max 35%, never titleSafeAreaOver40Percent; keep subtle structure, material, boundary, and depth; do not place detailed objects, faces, icons, strong contrast, or text-like patterns inside it; it must be anchored to the subject, not a full-height side panel, full-width panel, giant plaque, central paper sheet, or empty curtain.",
     "Reserve logo-safe zones according to the selected logo strategy. Do not generate logo. Do not default to a white logo patch unless the selected strategy explicitly asks for minimalProtectionPatch.",
     context.constraints.reserveMascotSpace ? "Leave optional small mascot compositing space, but do not generate the mascot." : "",
     context.constraints.reserveCampusInfoSpace ? "Leave optional information compositing space, but do not generate campus text." : "",
@@ -124,7 +124,8 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     "Translate them into background composition, symbolic objects, depth, light, material, and movement.",
     "Match the benchmark family instead of making a generic illustration, stock education poster, flat gradient, or decorative wallpaper.",
     "Keep theme visuals memorable but controlled; keep detailed objects outside the selected title-safe zone and logo-safe zone; avoid clutter and excessive text-like patterns.",
-    "Reserved areas must have subtle texture, light, paper depth, color structure, or low-complexity design intent; avoid overblankTitleZone and centerBlankBoard patterns.",
+    "Reserved title-safe areas must stay small enough for the background to remain visible around them; bind the title-safe shape to a ribbon, side segment, plaque edge, stage beam, book layer, or brand color boundary.",
+    "Avoid oversizedTitleSafeBoard, fullHeightBlankPanel, giantEmptyPlaque, emptySpotlightCurtain, centralPaperSheetDominance, disconnectedTitleIsland, overblankTitleZone, and centerBlankBoard patterns.",
     templates.base.layoutPrompt,
   ].filter(Boolean).join("\n");
 }
@@ -138,6 +139,7 @@ function buildNegativePrompt(context: StandardImagePromptContext, base: BaseTemp
     "cluttered layout", "low quality", "dark oppressive tone", "raw campus info",
     "generic AI art", "blank placeholder", "blank board", "empty gradient background", "stock illustration",
     "decorative wallpaper without theme", "weak primary visual hook", "unsafe logo area", "unclear title-safe zone", "overblank title zone", "overcrowded title zone", "text-like patterns near title/logo zones", "small center text", "detailed objects inside title-safe zone", "central high-detail subject", "high detail behind logo", "default logo patch", "fake white label behind logo", "text-like logo substitute",
+    "oversized title-safe board", "full-height blank panel", "giant empty plaque", "empty spotlight curtain", "central paper sheet dominance", "title-safe area over 40 percent", "disconnected title island",
     "pseudo text rows", "fake handwritten lines", "fake UI labels", "fake certificate words", "fake document paragraphs", "wall poster text blocks",
     ...(context.avoidNotes ? splitAvoidNotes(context.avoidNotes) : []),
     ...(context.form.avoidNotes ? splitAvoidNotes(context.form.avoidNotes) : []),

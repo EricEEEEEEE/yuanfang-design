@@ -62,12 +62,12 @@ function promptLines(resolved: ResolvedYuanfangVisualRules): string[] {
     `- family visual requirements: ${family.visualRequirements.join(" / ")}`,
     `- family primary motifs: ${family.primaryMotifs.join(" / ")}`,
     `- visualDensityTarget: ${resolved.visualDensityTarget}`,
-    `- titleSafePolicy: ${promptSafe(resolved.titleSafePolicy)}; make it low-complexity but visibly designed with subtle structure, material, boundary, and depth.`,
+    `- titleSafePolicy: ${promptSafe(resolved.titleSafePolicy)}; make it compact, low-complexity but visibly designed, with subtle structure, material, boundary, and depth; it must not exceed 40% of the canvas.`,
     `- logoSafePolicy: ${resolved.logoSafePolicy}; protect the full future logo group, not only a tiny icon.`,
     "- do not default to a white logo patch; use a patch only when selectedLogoStrategy is minimalProtectionPatch.",
     `- family forbidden signals: ${family.forbiddenSignals.map(promptSafe).join(" / ")}`,
     `- layout forbidden cases: ${layout.forbiddenWhen.map(promptSafe).join(" / ")}`,
-    "- avoid centerBlankBoard and overblankTitleZone patterns unless this selected layout explicitly requires a center hero lockup.",
+    "- avoid centerBlankBoard, overblankTitleZone, oversizedTitleSafeBoard, and disconnectedTitleIsland patterns.",
     "- avoid lower-only decorative elements; distribute theme motifs according to the selected layout grammar.",
   ];
 }

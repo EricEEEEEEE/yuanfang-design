@@ -10,6 +10,7 @@ export function designDecisionPromptLines(decision: YuanfangDesignDecision): str
     `- selectedCanvasIntent: ${decision.selectedCanvasIntent}; horizontalKeyVisual is design intent only unless the API canvas changes later.`,
     `- selectedLogoStrategy: ${decision.selectedLogoStrategy}; reserve space for future logo asset selection, do not generate a logo.`,
     `- selectedTitleSafeDesign: ${decision.selectedTitleSafeDesign}`,
+    `- titleSafeGeometry: shape ${decision.titleSafeGeometry.shape}; maxCanvasAreaRatio ${decision.titleSafeGeometry.maxCanvasAreaRatio}; preferredAreaRatioRange ${decision.titleSafeGeometry.preferredAreaRatioRange.join("-")}; no titleSafeAreaOver40Percent.`,
     `- titleSafeDesignPlan: ${decision.titleSafeDesignPlan}`,
     `- selectedVisualSubjectPlan: ${decision.selectedVisualSubjectPlan}`,
     `- logoSafeDesign: ${decision.logoSafeDesign}`,

@@ -3,6 +3,7 @@ import type {
   YuanfangAntiPatternKey,
   YuanfangCompositionFamilyKey,
   YuanfangDesignDecision,
+  YuanfangTitleSafeGeometry,
   YuanfangTitleSafeDesignKey,
   YuanfangVisualFamilyDecisionKey,
   YuanfangVisualSubjectPlanKey,
@@ -18,6 +19,7 @@ export function resolveYuanfangDesignDecision(
 ): YuanfangDesignDecision {
   const composition = compositionFamily(rules.family.key, rules.layout.key);
   const titleSafe = titleSafeDesign(composition, rules.family.key);
+  const geometry = titleSafeGeometry(titleSafe);
   const subjectPlan = visualSubjectPlan(context, rules.family.key);
   const treatment = YUANFANG_VISUAL_RULE_LAYER.styleTreatments[rules.selectedStyleTreatment];
   return {
@@ -31,7 +33,8 @@ export function resolveYuanfangDesignDecision(
     selectedLogoStrategy: rules.selectedLogoStrategy,
     selectedTitleSafeDesign: titleSafe,
     selectedVisualSubjectPlan: subjectPlan,
-    titleSafeDesignPlan: titleSafeDesignPlan(titleSafe),
+    titleSafeGeometry: geometry,
+    titleSafeDesignPlan: titleSafeDesignPlan(titleSafe, geometry),
     logoSafeDesign: `${rules.logoProtectionPolicy}; protect icon, Chinese wordmark, and English wordmark together.`,
     colorEnergy: treatment.colorEnergy,
     densityPlan: densityPlan(composition),
@@ -40,7 +43,7 @@ export function resolveYuanfangDesignDecision(
     differentiationPlan: differentiationPlan(rules.family.key, subjectPlan),
     antiPatternWarnings: antiPatterns(rules.family.key, titleSafe),
     negativeSignals: splitAvoidNotes(context.form.avoidNotes ?? context.avoidNotes ?? "").slice(0, 6),
-    promptDirectives: promptDirectives(composition, titleSafe, subjectPlan),
+    promptDirectives: promptDirectives(composition, titleSafe, subjectPlan, geometry),
     decisionReason: `Combined ${rules.family.key}, ${rules.layout.key}, ${rules.selectedStyleTreatment}, ${rules.selectedCanvasIntent}, and ${rules.selectedLogoStrategy} before prompt assembly.`,
   };
 }
@@ -90,7 +93,11 @@ function visualSubjectPlan(context: StandardImagePromptContext, family: Yuanfang
 }
 
 function antiPatterns(family: YuanfangVisualFamilyKey, titleSafe: YuanfangTitleSafeDesignKey): YuanfangAntiPatternKey[] {
-  const patterns: YuanfangAntiPatternKey[] = ["genericAIWallpaper", "tinyFloatingTitle", "textLikeTextureNearSafeZone", "fakeLogoPatch", "centerBlankBoard", "overblankTitleZone"];
+  const patterns: YuanfangAntiPatternKey[] = ["genericAIWallpaper", "tinyFloatingTitle", "textLikeTextureNearSafeZone", "fakeLogoPatch", "centerBlankBoard", "overblankTitleZone", "oversizedTitleSafeBoard", "titleSafeAreaOver40Percent", "disconnectedTitleIsland"];
+  if (titleSafe === "framedPlaqueTitleArea") patterns.push("giantEmptyPlaque");
+  if (titleSafe === "sidePanelTitleField") patterns.push("fullHeightBlankPanel");
+  if (titleSafe === "stageLightTitleZone" || titleSafe === "spotlightTitleField") patterns.push("emptySpotlightCurtain");
+  if (titleSafe === "editorialMarginTitleArea" || titleSafe === "texturedPaperTitleField") patterns.push("centralPaperSheetDominance");
   if (family !== "brandEvent" && family !== "companyActivity") patterns.push("softPastelSameness");
   if (family === "enrollment" || family === "openClass" || family === "literaryActivity") patterns.push("lowerOnlyDecoration");
   return Array.from(new Set(patterns));
@@ -104,18 +111,45 @@ function densityPlan(composition: YuanfangCompositionFamilyKey): string {
   return "3-5 controlled layers with designed safe zones and visible family motif";
 }
 
-function titleSafeDesignPlan(titleSafe: YuanfangTitleSafeDesignKey): string {
+function titleSafeDesignPlan(titleSafe: YuanfangTitleSafeDesignKey, geometry: YuanfangTitleSafeGeometry): string {
   const map: Record<YuanfangTitleSafeDesignKey, string> = {
-    texturedPaperTitleField: "warm paper fiber, soft edge shadow, shallow paper overlap, and calm grain",
-    colorBlockTitleField: "brand color gradient, kinetic boundary curve, restrained light streak, and layered color depth",
-    spotlightTitleField: "stage light cone, floor plane, soft side glow, and shallow backdrop depth",
-    diagonalRibbonTitleLane: "diagonal ribbon motion, light-band boundary, layered blue field, and clear title runway",
-    framedPlaqueTitleArea: "compact bordered plaque, subtle material grain, small corner ornament, and adjacent guofeng layers",
-    sidePanelTitleField: "side panel structure, fine divider line, brand texture, and shallow shadow depth",
-    editorialMarginTitleArea: "editorial margin, paper overlap, publication edge texture, and layered reading-space boundary",
-    stageLightTitleZone: "warm stage light, soft floor reflection, display-wall edge, and shallow spatial depth",
+    texturedPaperTitleField: "small textured paper patch anchored to books or motif, not a main central paper sheet",
+    colorBlockTitleField: "active brand color block with gradient, motion boundary, and no plain rectangle",
+    spotlightTitleField: "compact spotlight patch formed by beam edge, platform, and side glow, not a giant empty curtain",
+    diagonalRibbonTitleLane: "title lane follows ribbon or motion path with color and energy boundary, not an empty diagonal strip",
+    framedPlaqueTitleArea: "small framed plaque or compact bordered field, no giant empty plaque and no full-height blank panel",
+    sidePanelTitleField: "partial-height segmented side field connected to podium, honor, or display composition, not full-height",
+    editorialMarginTitleArea: "compact editorial margin in a side or corner zone, not the main central paper",
+    stageLightTitleZone: "compact stage light zone formed by beam edge, platform, and warm glow, not a giant empty curtain",
   };
-  return `${map[titleSafe]}; low-complexity but visibly designed.`;
+  return `${map[titleSafe]}; ${geometry.constraintPrompt}`;
+}
+
+function titleSafeGeometry(titleSafe: YuanfangTitleSafeDesignKey): YuanfangTitleSafeGeometry {
+  const shared = "must anchor to the visual subject, keep background visible around it, and must not exceed 40% of the canvas";
+  const map: Record<YuanfangTitleSafeDesignKey, Omit<YuanfangTitleSafeGeometry, "constraintPrompt">> = {
+    texturedPaperTitleField: baseGeometry("compactPanel", 0.28, [0.12, 0.24]),
+    colorBlockTitleField: baseGeometry("cornerField", 0.28, [0.14, 0.26]),
+    spotlightTitleField: baseGeometry("spotlightPatch", 0.32, [0.16, 0.3]),
+    diagonalRibbonTitleLane: baseGeometry("ribbon", 0.26, [0.12, 0.22]),
+    framedPlaqueTitleArea: baseGeometry("narrowLane", 0.3, [0.12, 0.24]),
+    sidePanelTitleField: baseGeometry("sideBand", 0.3, [0.14, 0.26]),
+    editorialMarginTitleArea: baseGeometry("editorialMargin", 0.28, [0.12, 0.24]),
+    stageLightTitleZone: baseGeometry("spotlightPatch", 0.35, [0.18, 0.32]),
+  };
+  return { ...map[titleSafe], constraintPrompt: `${shared}; preferred title-safe area ratio ${map[titleSafe].preferredAreaRatioRange[0]}-${map[titleSafe].preferredAreaRatioRange[1]}.` };
+}
+
+function baseGeometry(shape: YuanfangTitleSafeGeometry["shape"], maxCanvasAreaRatio: number, preferredAreaRatioRange: [number, number]): Omit<YuanfangTitleSafeGeometry, "constraintPrompt"> {
+  return {
+    shape,
+    maxCanvasAreaRatio,
+    preferredAreaRatioRange,
+    mustAnchorToVisualSubject: true,
+    mustAvoidFullHeightPanel: true,
+    mustAvoidFullWidthPanel: true,
+    mustKeepBackgroundVisibleAround: true,
+  };
 }
 
 function motifPlan(plan: YuanfangVisualSubjectPlanKey): string {
@@ -144,12 +178,12 @@ function differentiationPlan(family: YuanfangVisualFamilyKey, subjectPlan: Yuanf
   return `family-specific subject focus: ${subjectPlan}`;
 }
 
-function promptDirectives(composition: YuanfangCompositionFamilyKey, titleSafe: YuanfangTitleSafeDesignKey, subjectPlan: YuanfangVisualSubjectPlanKey): string[] {
+function promptDirectives(composition: YuanfangCompositionFamilyKey, titleSafe: YuanfangTitleSafeDesignKey, subjectPlan: YuanfangVisualSubjectPlanKey, geometry: YuanfangTitleSafeGeometry): string[] {
   return [
     "Use this as a designed poster key visual composition, not a generic illustration.",
     `The composition should visibly follow ${composition}.`,
-    `The title-safe area must be ${titleSafe}: low-complexity but visibly designed, with subtle structure, material, boundary, and depth.`,
+    `The title-safe area must be ${titleSafe}: shape ${geometry.shape}, preferred ${geometry.preferredAreaRatioRange[0]}-${geometry.preferredAreaRatioRange[1]} canvas area, max ${geometry.maxCanvasAreaRatio}, never titleSafeAreaOver40Percent.`,
     `The main visual subject plan is ${subjectPlan}; make it the largest non-text visual memory point.`,
-    "Avoid centerBlankBoard and overblankTitleZone; the calm title area must still look intentionally designed.",
+    "Avoid oversizedTitleSafeBoard, fullHeightBlankPanel, giantEmptyPlaque, emptySpotlightCurtain, centralPaperSheetDominance, disconnectedTitleIsland, centerBlankBoard, and overblankTitleZone.",
   ];
 }
