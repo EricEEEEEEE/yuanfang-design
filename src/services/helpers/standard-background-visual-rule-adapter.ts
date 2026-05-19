@@ -1,6 +1,9 @@
 import { YUANFANG_VISUAL_RULE_LAYER } from "@/config/yuanfang-design-rules";
+import type { YuanfangDesignDecision } from "@/models/yuanfang-design-decision";
 import type { StandardImagePromptContext } from "@/models/standard-background-generation";
 import type { YuanfangCanvasIntentKey, YuanfangLayoutGrammarKey, YuanfangLogoStrategyKey, YuanfangStyleTreatmentKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
+import { designDecisionPromptLines } from "@/services/helpers/yuanfang-design-decision-to-prompt";
+import { resolveYuanfangDesignDecision } from "@/services/helpers/yuanfang-design-decision-resolver";
 import { resolveYuanfangVisualRules, type ResolvedYuanfangVisualRules } from "@/services/helpers/yuanfang-visual-rule-resolver";
 
 export type StandardBackgroundVisualRuleContext = ResolvedYuanfangVisualRules & {
@@ -9,6 +12,7 @@ export type StandardBackgroundVisualRuleContext = ResolvedYuanfangVisualRules & 
   selectedStyleTreatment: YuanfangStyleTreatmentKey;
   selectedCanvasIntent: YuanfangCanvasIntentKey;
   selectedLogoStrategy: YuanfangLogoStrategyKey;
+  designDecision: YuanfangDesignDecision;
   negativeRuleKeys: string[];
   promptLines: string[];
   negativePromptPhrases: string[];
@@ -16,6 +20,7 @@ export type StandardBackgroundVisualRuleContext = ResolvedYuanfangVisualRules & 
 
 export function buildStandardBackgroundVisualRuleContext(context: StandardImagePromptContext): StandardBackgroundVisualRuleContext {
   const resolved = resolveYuanfangVisualRules(context);
+  const designDecision = resolveYuanfangDesignDecision(context, resolved);
   const negativeRuleKeys = resolved.negativeRules.map((rule) => rule.key);
   return {
     ...resolved,
@@ -24,8 +29,9 @@ export function buildStandardBackgroundVisualRuleContext(context: StandardImageP
     selectedStyleTreatment: resolved.selectedStyleTreatment,
     selectedCanvasIntent: resolved.selectedCanvasIntent,
     selectedLogoStrategy: resolved.selectedLogoStrategy,
+    designDecision,
     negativeRuleKeys,
-    promptLines: promptLines(resolved),
+    promptLines: [...promptLines(resolved), "", ...designDecisionPromptLines(designDecision)],
     negativePromptPhrases: resolved.negativeRules.map((rule) => rule.description),
   };
 }

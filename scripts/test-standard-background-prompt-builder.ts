@@ -18,7 +18,7 @@ const AI_WRITING = context({
   productOutputType: "enrollment",
   eventBrief: "春季公开课展示 AI作文批改 和写作能力提升，让家长看到智能反馈如何帮助孩子修改作文。",
   styleBrief: "蓝色科技教育感，温暖可信，不要冷硬 SaaS 风。",
-  visualDetails: "作文批改流程、学习路径、蓝色光效、课程模块。",
+  visualDetails: "作文批改流程、写作成长路径、蓝色光效、课程模块。",
   titleBrief: "突出 AI作文批改 体验。",
   mainTitle: "春季公开课",
   subtitle: "AI作文批改体验",
@@ -55,7 +55,7 @@ function main() {
     ["STANDARD_BACKGROUND_FESTIVAL_CHECK", hasAll(festival.prompt, ["诗词", "节日", "书卷"])],
     ["STANDARD_BACKGROUND_BRAND_EVENT_CHECK", hasAll(brandEvent.prompt, ["发布会", "品牌升级", "brand event", "brand color"])],
     ["STANDARD_BACKGROUND_TEACHING_COMPETITION_CHECK", hasAll(teachingCompetition.prompt, ["教学比赛", "作品墙", "stageShowcase"])],
-    ["STANDARD_BACKGROUND_DIVERSITY_LANGUAGE_CHECK", hasAll(brandEvent.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "Do not generate logo"])],
+    ["STANDARD_BACKGROUND_DIVERSITY_LANGUAGE_CHECK", hasAll(brandEvent.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "Yuanfang design decision", "Do not generate logo"])],
     ["STANDARD_BACKGROUND_AI_WRITING_TREATMENT_CHECK", hasAll(aiWriting.prompt, ["AI作文批改", "techBlueLearning", "blue learning technology"])],
     ["STANDARD_BACKGROUND_AVOID_STRESS_CHECK", hasAll(avoid.negativePrompt, ["真实照片", "日漫", "水印", "二维码", "廉价广告"])],
   ];
@@ -108,16 +108,17 @@ function qualitySummary(prompt: string, negativePrompt: string): Record<string, 
 }
 
 function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildResult]>): { results: Record<string, string>[]; checks: Array<[string, boolean]> } {
-  const expected: Record<string, { families: string[]; motif: string }> = {
-    fourClassics: { families: ["literaryActivity", "enrollment", "openClass"], motif: "书页空间" },
-    achievement: { families: ["achievementShowcase"], motif: "舞台光" },
-    festival: { families: ["poetryFestival", "guofengLiterature"], motif: "诗卷" },
-    brandEvent: { families: ["brandEvent", "companyActivity"], motif: "品牌色带" },
-    teachingCompetition: { families: ["teachingCompetition", "campusActivity"], motif: "作品墙" },
-    aiWriting: { families: ["openClass", "enrollment"], motif: "课程入口" },
+  const expected: Record<string, { families: string[]; motif: string; visual: string; composition: string; subject: string }> = {
+    fourClassics: { families: ["literaryActivity", "enrollment", "openClass"], motif: "书页空间", visual: "literaryCourseVisual", composition: "layeredCollageComposition", subject: "booksAndCharacters" },
+    achievement: { families: ["achievementShowcase"], motif: "舞台光", visual: "achievementShowcaseVisual", composition: "stageDepthComposition", subject: "stageAndWorks" },
+    festival: { families: ["poetryFestival", "guofengLiterature"], motif: "诗卷", visual: "guofengLiteratureVisual", composition: "verticalSealComposition", subject: "guofengLandscapeAndScroll" },
+    brandEvent: { families: ["brandEvent", "companyActivity"], motif: "品牌色带", visual: "brandEventKV", composition: "splitColorBlockComposition", subject: "brandLightTrailAndStage" },
+    teachingCompetition: { families: ["teachingCompetition", "campusActivity"], motif: "作品墙", visual: "campusHonorVisual", composition: "posterCardComposition", subject: "teachingPodiumAndHonor" },
+    aiWriting: { families: ["openClass", "enrollment"], motif: "课程入口", visual: "techLearningVisual", composition: "diagonalMomentumComposition", subject: "techWritingInterfaceAbstraction" },
   };
   const results = samples.map(([name, sample]) => {
     const rules = sample.promptDiagnostics.visualRules;
+    const decision = rules?.designDecision;
     const allowed = expected[name]?.families ?? [];
     return {
       sample: name,
@@ -126,25 +127,32 @@ function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildR
       selectedStyleTreatment: rules?.selectedStyleTreatment ?? "",
       selectedCanvasIntent: rules?.selectedCanvasIntent ?? "",
       selectedLogoStrategy: rules?.selectedLogoStrategy ?? "",
+      selectedVisualFamily: decision?.selectedVisualFamily ?? "",
+      selectedCompositionFamily: decision?.selectedCompositionFamily ?? "",
+      selectedTitleSafeDesign: decision?.selectedTitleSafeDesign ?? "",
+      selectedVisualSubjectPlan: decision?.selectedVisualSubjectPlan ?? "",
       familyAccepted: rules && allowed.includes(rules.selectedBenchmarkFamily) ? "PASS" : "FAIL",
       layoutPresent: rules?.selectedLayoutGrammar ? "PASS" : "FAIL",
+      decisionAccepted: decision?.selectedVisualFamily === expected[name]?.visual && decision?.selectedCompositionFamily === expected[name]?.composition && decision?.selectedVisualSubjectPlan === expected[name]?.subject ? "PASS" : "FAIL",
       promptContainsMotif: sample.prompt.includes(expected[name]?.motif ?? "family primary motifs") ? "PASS" : "FAIL",
       promptContainsLayoutIntent: hasAll(sample.prompt, ["selectedLayoutGrammar", "layout title placement", "layout visual subject placement"]) ? "PASS" : "FAIL",
       promptContainsSafeZones: hasAll(sample.prompt, ["designed title-safe zone", "logoSafePolicy"]) ? "PASS" : "FAIL",
-      promptContainsDiversityIntent: hasAll(sample.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy"]) ? "PASS" : "FAIL",
+      promptContainsDiversityIntent: hasAll(sample.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "selectedTitleSafeDesign", "antiPatternWarnings"]) ? "PASS" : "FAIL",
       negativeContainsL2Rules: hasAll(sample.negativePrompt, ["fake Chinese characters", "fake logo", "generated mascot", "campus phone", "generic AI art", "empty placeholder gradient", "text-like patterns near title/logo zones"]) ? "PASS" : "FAIL",
-      diagnosticsExposeRules: rules && rules.consumedRuleKeys.length > 0 && rules.negativeRuleKeys.length > 0 && rules.layoutSelectionReason && rules.styleTreatmentReason ? "PASS" : "FAIL",
+      diagnosticsExposeRules: rules && decision && rules.consumedRuleKeys.length > 0 && rules.negativeRuleKeys.length > 0 && decision.antiPatternWarnings.includes("genericAIWallpaper") && decision.decisionReason ? "PASS" : "FAIL",
     };
   });
   const layouts = results.map((item) => item.selectedLayoutGrammar);
   const styles = results.map((item) => item.selectedStyleTreatment);
   const canvasIntents = results.map((item) => item.selectedCanvasIntent);
   const logoStrategies = results.map((item) => item.selectedLogoStrategy);
+  const titleSafeDesigns = results.map((item) => item.selectedTitleSafeDesign);
   return {
     results,
     checks: [
       ["STANDARD_BACKGROUND_L2_FAMILY_SELECTION_CHECK", results.every((item) => item.familyAccepted === "PASS")],
       ["STANDARD_BACKGROUND_L2_LAYOUT_SELECTION_CHECK", results.every((item) => item.layoutPresent === "PASS") && new Set(layouts).size > 1],
+      ["STANDARD_BACKGROUND_DESIGN_DECISION_CHECK", results.every((item) => item.decisionAccepted === "PASS")],
       ["STANDARD_BACKGROUND_L2_PROMPT_CONSUMPTION_CHECK", results.every((item) => item.promptContainsMotif === "PASS" && item.promptContainsLayoutIntent === "PASS" && item.promptContainsSafeZones === "PASS" && item.promptContainsDiversityIntent === "PASS")],
       ["STANDARD_BACKGROUND_L2_NEGATIVE_RULE_CHECK", results.every((item) => item.negativeContainsL2Rules === "PASS")],
       ["STANDARD_BACKGROUND_L2_DIAGNOSTICS_CHECK", results.every((item) => item.diagnosticsExposeRules === "PASS")],
@@ -152,6 +160,8 @@ function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildR
       ["STANDARD_BACKGROUND_STYLE_DIVERSITY_CHECK", new Set(styles).size > 3],
       ["STANDARD_BACKGROUND_CANVAS_INTENT_DIVERSITY_CHECK", canvasIntents.includes("horizontalKeyVisual") && canvasIntents.includes("verticalPoster")],
       ["STANDARD_BACKGROUND_LOGO_STRATEGY_NOT_DEFAULT_PATCH_CHECK", logoStrategies.some((item) => item !== "minimalProtectionPatch") && !logoStrategies.every((item) => item === "minimalProtectionPatch")],
+      ["STANDARD_BACKGROUND_TITLE_SAFE_DESIGN_DIVERSITY_CHECK", new Set(titleSafeDesigns).size > 3],
+      ["STANDARD_BACKGROUND_NEGATIVE_INTENT_NOT_POSITIVE_STYLE_CHECK", results.find((item) => item.sample === "brandEvent")?.selectedStyleTreatment === "brandKineticKV"],
     ],
   };
 }

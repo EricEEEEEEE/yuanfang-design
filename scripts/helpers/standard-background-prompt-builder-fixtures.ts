@@ -64,6 +64,7 @@ export const BRAND_EVENT = context({
   styleBrief: "需要有发布会、品牌升级、课程体系焕新的感觉，视觉冲击强但仍然专业。",
   visualDetails: "品牌色动线、发布会舞台光、课程模块、深蓝和橙红色块、清晰标题区。",
   titleBrief: "突出品牌升级与课程发布。",
+  avoidNotes: "不要过度科技感，不要夜店风。",
   mainTitle: "花开远方发布会",
   subtitle: "新课程体系升级",
   hook: "品牌升级与课程发布",

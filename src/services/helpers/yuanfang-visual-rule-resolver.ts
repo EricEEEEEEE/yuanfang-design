@@ -1,7 +1,7 @@
 import { YUANFANG_VISUAL_RULE_LAYER } from "@/config/yuanfang-design-rules";
 import type { StandardImagePromptContext } from "@/models/standard-background-generation";
 import type { YuanfangCanvasIntentKey, YuanfangLayoutGrammarKey, YuanfangLogoStrategyKey, YuanfangNegativeRule, YuanfangRuleDimension, YuanfangStyleTreatmentKey, YuanfangVisualBenchmarkFamily, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
-import { allBriefText, hasAny } from "@/services/helpers/standard-background-prompt-utils";
+import { hasAny, positiveBriefText } from "@/services/helpers/standard-background-prompt-utils";
 
 export type ResolvedYuanfangVisualRules = {
   source: "yuanfang-visual-rules-l2";
@@ -84,7 +84,7 @@ export function resolveYuanfangVisualRules(context: StandardImagePromptContext):
 }
 
 function selectFamily(context: StandardImagePromptContext): YuanfangVisualFamilyKey {
-  const text = allBriefText(context);
+  const text = positiveBriefText(context);
   const product = context.form.productOutputType;
   if (hasAny(text, ["教学比赛", "教师风采", "赛课", "比赛"])) return "teachingCompetition";
   if (hasAny(text, ["品牌升级", "课程体系", "课程发布", "发布会", "总部活动"])) return "brandEvent";
@@ -100,7 +100,7 @@ function selectFamily(context: StandardImagePromptContext): YuanfangVisualFamily
 }
 
 function selectLayout(context: StandardImagePromptContext, family: YuanfangVisualBenchmarkFamily): YuanfangLayoutGrammarKey {
-  const text = allBriefText(context);
+  const text = positiveBriefText(context);
   const preferred = family.preferredLayouts.filter((key) => YUANFANG_VISUAL_RULE_LAYER.layouts[key]?.families.includes(family.key));
   const candidates = preferred.length > 0 ? preferred : family.preferredLayouts;
   const forced = forcedLayout(text, candidates);
@@ -111,7 +111,7 @@ function selectLayout(context: StandardImagePromptContext, family: YuanfangVisua
 }
 
 function selectStyleTreatment(context: StandardImagePromptContext, family: YuanfangVisualBenchmarkFamily): YuanfangStyleTreatmentKey {
-  const text = allBriefText(context);
+  const text = positiveBriefText(context);
   if (hasAny(text, ["AI作文", "AI 作文", "智能批改", "作文批改", "科技"])) return "techBlueLearning";
   if (family.key === "brandEvent" || family.key === "companyActivity") return "brandKineticKV";
   if (family.key === "poetryFestival" || family.key === "guofengLiterature" || hasAny(text, ["国风", "诗词", "端午", "传统文化", "四大名著"])) return "modernGuofengInk";
@@ -122,7 +122,7 @@ function selectStyleTreatment(context: StandardImagePromptContext, family: Yuanf
 }
 
 function selectCanvasIntent(context: StandardImagePromptContext, family: YuanfangVisualBenchmarkFamily): YuanfangCanvasIntentKey {
-  const text = allBriefText(context);
+  const text = positiveBriefText(context);
   if (hasAny(text, ["横版", "大屏", "主屏", "横幅"])) return "horizontalKeyVisual";
   if (hasAny(text, ["方图", "九宫格", "社群封面"])) return "squareSocial";
   if (family.key === "brandEvent" || family.key === "companyActivity" || family.key === "achievementShowcase" || family.key === "teachingCompetition") return "horizontalKeyVisual";
@@ -131,7 +131,7 @@ function selectCanvasIntent(context: StandardImagePromptContext, family: Yuanfan
 }
 
 function selectLogoStrategy(context: StandardImagePromptContext, family: YuanfangVisualBenchmarkFamily, treatment: YuanfangStyleTreatmentKey, layout: YuanfangLayoutGrammarKey): YuanfangLogoStrategyKey {
-  const text = allBriefText(context);
+  const text = positiveBriefText(context);
   if (treatment === "brandKineticKV") return "whiteLockup";
   if (treatment === "modernGuofengInk" || treatment === "literaryEditorialCollage") return "deepBlueLockup";
   if (treatment === "warmAchievementStage" || treatment === "campusHonorFormal" || layout === "stageShowcase" || layout === "frameContainer") return "repositionPreferred";

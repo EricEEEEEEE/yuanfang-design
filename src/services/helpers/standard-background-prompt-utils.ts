@@ -16,6 +16,10 @@ export function allBriefText(context: StandardImagePromptContext): string {
   return [context.visualHook?.primaryHook, context.form.eventBrief, context.form.styleBrief, context.form.visualDetails, context.form.titleBrief, context.form.avoidNotes].filter(Boolean).join(" ");
 }
 
+export function positiveBriefText(context: StandardImagePromptContext): string {
+  return [context.visualHook?.primaryHook, context.form.eventBrief, context.form.styleBrief, context.form.visualDetails, context.form.titleBrief].filter(Boolean).join(" ");
+}
+
 export function hasAny(value: string, needles: string[]): boolean {
   return needles.some((needle) => value.includes(needle));
 }

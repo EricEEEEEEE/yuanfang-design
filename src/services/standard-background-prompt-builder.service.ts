@@ -51,6 +51,7 @@ export function buildStandardBackgroundPrompt(
         layoutSelectionReason: visualRules.layoutSelectionReason,
         styleTreatmentReason: visualRules.styleTreatmentReason,
         logoStrategyReason: visualRules.logoStrategyReason,
+        designDecision: visualRules.designDecision,
       },
       backgroundOnly: true,
       forbiddenGeneratedElements: FORBIDDEN_ELEMENTS,

@@ -3,6 +3,7 @@ import type {
   StandardFormV2ProductOutputType,
   StandardFormV2TitleInput,
 } from "@/models/standard-generation-api-v2";
+import type { YuanfangDesignDecision } from "@/models/yuanfang-design-decision";
 import type { YuanfangCanvasIntentKey, YuanfangLayoutGrammarKey, YuanfangLogoStrategyKey, YuanfangStyleTreatmentKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
 
 export type StandardImagePromptContext = {
@@ -84,6 +85,7 @@ export type StandardBackgroundPromptBuildResult = {
       layoutSelectionReason: string;
       styleTreatmentReason: string;
       logoStrategyReason: string;
+      designDecision: YuanfangDesignDecision;
     };
     backgroundOnly: true;
     forbiddenGeneratedElements: string[];
