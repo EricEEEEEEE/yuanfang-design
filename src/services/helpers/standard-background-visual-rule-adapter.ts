@@ -62,12 +62,20 @@ function promptLines(resolved: ResolvedYuanfangVisualRules): string[] {
     `- family visual requirements: ${family.visualRequirements.join(" / ")}`,
     `- family primary motifs: ${family.primaryMotifs.join(" / ")}`,
     `- visualDensityTarget: ${resolved.visualDensityTarget}`,
-    `- titleSafePolicy: ${resolved.titleSafePolicy}; this is a designed low-complexity zone, not a blank board.`,
+    `- titleSafePolicy: ${promptSafe(resolved.titleSafePolicy)}; make it low-complexity but visibly designed with subtle structure, material, boundary, and depth.`,
     `- logoSafePolicy: ${resolved.logoSafePolicy}; protect the full future logo group, not only a tiny icon.`,
     "- do not default to a white logo patch; use a patch only when selectedLogoStrategy is minimalProtectionPatch.",
-    `- family forbidden signals: ${family.forbiddenSignals.join(" / ")}`,
-    `- layout forbidden cases: ${layout.forbiddenWhen.join(" / ")}`,
-    "- avoid repetitive center-blank composition unless this selected layout explicitly requires a center hero lockup.",
+    `- family forbidden signals: ${family.forbiddenSignals.map(promptSafe).join(" / ")}`,
+    `- layout forbidden cases: ${layout.forbiddenWhen.map(promptSafe).join(" / ")}`,
+    "- avoid centerBlankBoard and overblankTitleZone patterns unless this selected layout explicitly requires a center hero lockup.",
     "- avoid lower-only decorative elements; distribute theme motifs according to the selected layout grammar.",
   ];
+}
+
+function promptSafe(value: string): string {
+  return value
+    .replace(/blank board/g, "centerBlankBoard")
+    .replace(/empty board/g, "overblankTitleZone")
+    .replace(/large blank/g, "overblankTitleZone")
+    .replace(/empty plaque/g, "oversized plain plaque");
 }

@@ -31,10 +31,13 @@ export function resolveYuanfangDesignDecision(
     selectedLogoStrategy: rules.selectedLogoStrategy,
     selectedTitleSafeDesign: titleSafe,
     selectedVisualSubjectPlan: subjectPlan,
+    titleSafeDesignPlan: titleSafeDesignPlan(titleSafe),
     logoSafeDesign: `${rules.logoProtectionPolicy}; protect icon, Chinese wordmark, and English wordmark together.`,
     colorEnergy: treatment.colorEnergy,
     densityPlan: densityPlan(composition),
     motifPlan: motifPlan(subjectPlan),
+    textPollutionGuard: textPollutionGuard(subjectPlan),
+    differentiationPlan: differentiationPlan(rules.family.key, subjectPlan),
     antiPatternWarnings: antiPatterns(rules.family.key, titleSafe),
     negativeSignals: splitAvoidNotes(context.form.avoidNotes ?? context.avoidNotes ?? "").slice(0, 6),
     promptDirectives: promptDirectives(composition, titleSafe, subjectPlan),
@@ -87,19 +90,32 @@ function visualSubjectPlan(context: StandardImagePromptContext, family: Yuanfang
 }
 
 function antiPatterns(family: YuanfangVisualFamilyKey, titleSafe: YuanfangTitleSafeDesignKey): YuanfangAntiPatternKey[] {
-  const patterns: YuanfangAntiPatternKey[] = ["genericAIWallpaper", "tinyFloatingTitle", "textLikeTextureNearSafeZone", "fakeLogoPatch"];
-  if (titleSafe !== "colorBlockTitleField") patterns.push("centerBlankBoard");
+  const patterns: YuanfangAntiPatternKey[] = ["genericAIWallpaper", "tinyFloatingTitle", "textLikeTextureNearSafeZone", "fakeLogoPatch", "centerBlankBoard", "overblankTitleZone"];
   if (family !== "brandEvent" && family !== "companyActivity") patterns.push("softPastelSameness");
   if (family === "enrollment" || family === "openClass" || family === "literaryActivity") patterns.push("lowerOnlyDecoration");
   return Array.from(new Set(patterns));
 }
 
 function densityPlan(composition: YuanfangCompositionFamilyKey): string {
-  if (composition === "stageDepthComposition" || composition === "posterCardComposition") return "stage depth with side displays, not an empty spotlight wall";
+  if (composition === "stageDepthComposition" || composition === "posterCardComposition") return "stage depth with side displays, layered light, podium planes, and readable calm areas";
   if (composition === "diagonalMomentumComposition") return "diagonal motion layers with a clear non-text hero subject";
   if (composition === "layeredCollageComposition") return "layered editorial foreground, midground motif, and textured title field";
-  if (composition === "verticalSealComposition") return "modern guofeng layers around a compact title plaque, not a large blank plaque";
+  if (composition === "verticalSealComposition") return "modern guofeng layers around a compact bordered title lane with texture and adjacent breathing room";
   return "3-5 controlled layers with designed safe zones and visible family motif";
+}
+
+function titleSafeDesignPlan(titleSafe: YuanfangTitleSafeDesignKey): string {
+  const map: Record<YuanfangTitleSafeDesignKey, string> = {
+    texturedPaperTitleField: "warm paper fiber, soft edge shadow, shallow paper overlap, and calm grain",
+    colorBlockTitleField: "brand color gradient, kinetic boundary curve, restrained light streak, and layered color depth",
+    spotlightTitleField: "stage light cone, floor plane, soft side glow, and shallow backdrop depth",
+    diagonalRibbonTitleLane: "diagonal ribbon motion, light-band boundary, layered blue field, and clear title runway",
+    framedPlaqueTitleArea: "compact bordered plaque, subtle material grain, small corner ornament, and adjacent guofeng layers",
+    sidePanelTitleField: "side panel structure, fine divider line, brand texture, and shallow shadow depth",
+    editorialMarginTitleArea: "editorial margin, paper overlap, publication edge texture, and layered reading-space boundary",
+    stageLightTitleZone: "warm stage light, soft floor reflection, display-wall edge, and shallow spatial depth",
+  };
+  return `${map[titleSafe]}; low-complexity but visibly designed.`;
 }
 
 function motifPlan(plan: YuanfangVisualSubjectPlanKey): string {
@@ -115,12 +131,25 @@ function motifPlan(plan: YuanfangVisualSubjectPlanKey): string {
   return map[plan];
 }
 
+function textPollutionGuard(plan: YuanfangVisualSubjectPlanKey): string {
+  const base = "use abstract shapes, icons, color blocks, blank cards, blurred geometric marks; no pseudo text rows, fake handwritten lines, fake UI labels, fake certificate words, fake document paragraphs, or wall poster text blocks";
+  if (plan === "techWritingInterfaceAbstraction") return `${base}; UI-like cards must use bars, dots, and icons only`;
+  if (plan === "stageAndWorks" || plan === "teachingPodiumAndHonor") return `${base}; works walls, certificates, and displays must stay symbol-only`;
+  return base;
+}
+
+function differentiationPlan(family: YuanfangVisualFamilyKey, subjectPlan: YuanfangVisualSubjectPlanKey): string {
+  if (family === "achievementShowcase") return "parent-facing growth showcase: warm light, child work display, expression outcome, reading growth path, symbol-only works wall";
+  if (family === "teachingCompetition") return "formal teaching event: podium, honor medallion, structured classroom/stage, professional education cues, not the warm child-growth showcase template";
+  return `family-specific subject focus: ${subjectPlan}`;
+}
+
 function promptDirectives(composition: YuanfangCompositionFamilyKey, titleSafe: YuanfangTitleSafeDesignKey, subjectPlan: YuanfangVisualSubjectPlanKey): string[] {
   return [
     "Use this as a designed poster key visual composition, not a generic illustration.",
     `The composition should visibly follow ${composition}.`,
-    `The title-safe area must be ${titleSafe}, a designed visual structure, not an empty blank board.`,
+    `The title-safe area must be ${titleSafe}: low-complexity but visibly designed, with subtle structure, material, boundary, and depth.`,
     `The main visual subject plan is ${subjectPlan}; make it the largest non-text visual memory point.`,
-    "Do not default to center empty space unless the selected composition explicitly requires it.",
+    "Avoid centerBlankBoard and overblankTitleZone; the calm title area must still look intentionally designed.",
   ];
 }

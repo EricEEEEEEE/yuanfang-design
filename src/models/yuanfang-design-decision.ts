@@ -48,6 +48,7 @@ export type YuanfangVisualSubjectPlanKey =
 
 export type YuanfangAntiPatternKey =
   | "centerBlankBoard"
+  | "overblankTitleZone"
   | "lowerOnlyDecoration"
   | "softPastelSameness"
   | "fakeLogoPatch"
@@ -66,10 +67,13 @@ export type YuanfangDesignDecision = {
   selectedLogoStrategy: YuanfangLogoStrategyKey;
   selectedTitleSafeDesign: YuanfangTitleSafeDesignKey;
   selectedVisualSubjectPlan: YuanfangVisualSubjectPlanKey;
+  titleSafeDesignPlan: string;
   logoSafeDesign: string;
   colorEnergy: string;
   densityPlan: string;
   motifPlan: string;
+  textPollutionGuard: string;
+  differentiationPlan: string;
   antiPatternWarnings: YuanfangAntiPatternKey[];
   negativeSignals: string[];
   promptDirectives: string[];

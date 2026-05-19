@@ -44,7 +44,7 @@ function main() {
   ]);
   const checks = [
     ["STANDARD_BACKGROUND_BENCHMARK_LANGUAGE_CHECK", hasAll(four.prompt, ["Yuanfang education-brand key visual benchmark", "visual density", "primary visual hook", "title-safe", "logo-safe"])],
-    ["STANDARD_BACKGROUND_SAFE_ZONE_PROTECTION_CHECK", hasAll(four.prompt, ["selected L2 layout grammar", "designed title-safe zone", "low-complexity", "not a blank board", "do not place detailed objects"])],
+    ["STANDARD_BACKGROUND_SAFE_ZONE_PROTECTION_CHECK", hasAll(four.prompt, ["selected L2 layout grammar", "low-complexity but visibly designed", "subtle structure", "material", "boundary", "depth", "do not place detailed objects"])],
     ["STANDARD_BACKGROUND_FOUR_CLASSICS_THEME_CHECK", hasAll(four.prompt, ["四大名著", "书籍", "国风"])],
     ["STANDARD_BACKGROUND_NO_TEXT_POLICY_CHECK", hasAll(four.prompt, ["Background visual only", "not a final poster", "Do not generate readable", "Do not generate title"])],
     ["STANDARD_BACKGROUND_NO_LOGO_POLICY_CHECK", hasAll(four.prompt, ["Do not generate logo", "Logo is composited later"])],
@@ -58,6 +58,11 @@ function main() {
     ["STANDARD_BACKGROUND_DIVERSITY_LANGUAGE_CHECK", hasAll(brandEvent.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "Yuanfang design decision", "Do not generate logo"])],
     ["STANDARD_BACKGROUND_AI_WRITING_TREATMENT_CHECK", hasAll(aiWriting.prompt, ["AI作文批改", "techBlueLearning", "blue learning technology"])],
     ["STANDARD_BACKGROUND_AVOID_STRESS_CHECK", hasAll(avoid.negativePrompt, ["真实照片", "日漫", "水印", "二维码", "廉价广告"])],
+    ["STANDARD_BACKGROUND_TITLE_SAFE_NO_BLANK_BOARD_WORDING_CHECK", [four, achievement, festival, brandEvent, teachingCompetition, aiWriting].every((sample) => !hasAnyPrompt(sample.prompt, ["blank board", "empty board", "large blank", "empty plaque"]))],
+    ["STANDARD_BACKGROUND_TITLE_SAFE_STRUCTURE_CHECK", [four, achievement, festival, brandEvent, teachingCompetition, aiWriting].every((sample) => hasAll(sample.prompt, ["low-complexity but visibly designed", "subtle structure", "boundary", "depth"]))],
+    ["STANDARD_BACKGROUND_TEXT_POLLUTION_GUARD_CHECK", hasAll(aiWriting.negativePrompt, ["fake UI labels", "fake certificate words", "fake document paragraphs", "wall poster text blocks", "pseudo text rows", "fake handwritten lines"])],
+    ["STANDARD_BACKGROUND_FESTIVAL_VERTICAL_SEAL_STABILITY_CHECK", hasAll(festival.prompt, ["verticalSealComposition", "framedPlaqueTitleArea", "compact bordered title lane", "adjacent breathing room"])],
+    ["STANDARD_BACKGROUND_ACHIEVEMENT_TEACHING_DIFFERENTIATION_CHECK", visualRules.results.find((item) => item.sample === "achievement")?.selectedVisualSubjectPlan === "stageAndWorks" && visualRules.results.find((item) => item.sample === "teachingCompetition")?.selectedVisualSubjectPlan === "teachingPodiumAndHonor" && visualRules.results.find((item) => item.sample === "achievement")?.selectedCompositionFamily !== visualRules.results.find((item) => item.sample === "teachingCompetition")?.selectedCompositionFamily],
   ];
   const qa = [
     ["fourClassicsEnrollment", qualitySummary(four.prompt, four.negativePrompt)],
@@ -100,7 +105,7 @@ function qualitySummary(prompt: string, negativePrompt: string): Record<string, 
     themeVisible: pass(prompt, ["primary visual hook", "Main visual theme anchor"]),
     designDensity: pass(prompt, ["visual density", "3-5 controlled layers"]),
     yuanfangBrand: pass(prompt, ["Yuanfang", "brand color", "education-brand"]),
-    titleSafe: pass(prompt, ["designed title-safe zone", "low-complexity", "not a blank board"]),
+    titleSafe: pass(prompt, ["low-complexity but visibly designed", "subtle structure", "boundary", "depth"]),
     logoSafe: pass(prompt, ["logo-safe", "top-right"]),
     noTextPolicy: pass(prompt + negativePrompt, ["Do not generate readable", "fake Chinese characters"]),
     genericGuard: pass(negativePrompt, ["generic AI art", "blank placeholder"]),
@@ -161,6 +166,7 @@ function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildR
       ["STANDARD_BACKGROUND_CANVAS_INTENT_DIVERSITY_CHECK", canvasIntents.includes("horizontalKeyVisual") && canvasIntents.includes("verticalPoster")],
       ["STANDARD_BACKGROUND_LOGO_STRATEGY_NOT_DEFAULT_PATCH_CHECK", logoStrategies.some((item) => item !== "minimalProtectionPatch") && !logoStrategies.every((item) => item === "minimalProtectionPatch")],
       ["STANDARD_BACKGROUND_TITLE_SAFE_DESIGN_DIVERSITY_CHECK", new Set(titleSafeDesigns).size > 3],
+      ["STANDARD_BACKGROUND_TITLE_SAFE_ANTI_PATTERN_CHECK", samples.every(([, sample]) => (["centerBlankBoard", "overblankTitleZone", "textLikeTextureNearSafeZone"] as const).every((item) => sample.promptDiagnostics.visualRules?.designDecision.antiPatternWarnings.includes(item)))],
       ["STANDARD_BACKGROUND_NEGATIVE_INTENT_NOT_POSITIVE_STYLE_CHECK", results.find((item) => item.sample === "brandEvent")?.selectedStyleTreatment === "brandKineticKV"],
     ],
   };
@@ -168,6 +174,10 @@ function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildR
 
 function pass(value: string, needles: string[]): string {
   return hasAll(value, needles) ? "PASS" : "CHECK";
+}
+
+function hasAnyPrompt(value: string, needles: string[]): boolean {
+  return needles.some((needle) => value.includes(needle));
 }
 
 main();
