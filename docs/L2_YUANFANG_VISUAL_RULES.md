@@ -104,6 +104,16 @@ Required layout grammar keys:
 
 Each layout defines suitable families, title placement, visual subject placement, logo-safe zone, title-safe zone, canvas suitability, and forbidden situations.
 
+## Design Diversity Axes
+
+L2 also defines three diversity axes for L3 prompt consumption:
+
+- Logo strategy: `colorFullLockup`, `whiteLockup`, `deepBlueLockup`, `repositionPreferred`, `minimalProtectionPatch`.
+- Canvas intent: `verticalPoster`, `horizontalKeyVisual`, `squareSocial`.
+- Style treatment: `brandKineticKV`, `boldEnrollmentCampaign`, `literaryEditorialCollage`, `modernGuofengInk`, `warmAchievementStage`, `campusHonorFormal`, `techBlueLearning`, `premiumMinimalNotice`.
+
+These are prompt and diagnostics hints only. They do not switch real logo assets, change frontend canvas, or change Final Composer behavior.
+
 ## Title Rules
 
 L2 title expectations:

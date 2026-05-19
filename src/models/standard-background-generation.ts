@@ -3,7 +3,7 @@ import type {
   StandardFormV2ProductOutputType,
   StandardFormV2TitleInput,
 } from "@/models/standard-generation-api-v2";
-import type { YuanfangLayoutGrammarKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
+import type { YuanfangCanvasIntentKey, YuanfangLayoutGrammarKey, YuanfangLogoStrategyKey, YuanfangStyleTreatmentKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
 
 export type StandardImagePromptContext = {
   source: "standard-form-v2";
@@ -69,12 +69,21 @@ export type StandardBackgroundPromptBuildResult = {
       source: "yuanfang-visual-rules-l2";
       selectedBenchmarkFamily: YuanfangVisualFamilyKey;
       selectedLayoutGrammar: YuanfangLayoutGrammarKey;
+      selectedStyleTreatment: YuanfangStyleTreatmentKey;
+      selectedCanvasIntent: YuanfangCanvasIntentKey;
+      selectedLogoStrategy: YuanfangLogoStrategyKey;
+      logoVariantHint: string;
+      logoPlacementCandidates: string[];
+      logoProtectionPolicy: string;
+      aspectRatioClass: string;
       visualDensityTarget: string;
       titleSafePolicy: string;
       logoSafePolicy: string;
       consumedRuleKeys: string[];
       negativeRuleKeys: string[];
       layoutSelectionReason: string;
+      styleTreatmentReason: string;
+      logoStrategyReason: string;
     };
     backgroundOnly: true;
     forbiddenGeneratedElements: string[];

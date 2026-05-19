@@ -1,5 +1,8 @@
+import { YUANFANG_CANVAS_INTENTS } from "@/config/yuanfang-aspect-strategies";
+import { YUANFANG_LOGO_STRATEGIES } from "@/config/yuanfang-logo-strategies";
 import { YUANFANG_VISUAL_BENCHMARK_FAMILIES } from "@/config/yuanfang-visual-benchmark";
 import { YUANFANG_LAYOUT_GRAMMAR, YUANFANG_RULE_DIMENSIONS } from "@/config/yuanfang-visual-grammar";
+import { YUANFANG_STYLE_TREATMENTS } from "@/config/yuanfang-style-treatments";
 import type {
   YuanfangBackgroundRule,
   YuanfangNegativeRule,
@@ -7,6 +10,8 @@ import type {
   YuanfangTitleRule,
   YuanfangVisualRuleLayer,
 } from "@/models/yuanfang-visual-rules";
+
+export { YUANFANG_CANVAS_INTENTS, YUANFANG_LOGO_STRATEGIES, YUANFANG_STYLE_TREATMENTS };
 
 export const YUANFANG_TITLE_RULES: YuanfangTitleRule[] = [
   {
@@ -111,8 +116,8 @@ export const YUANFANG_NEGATIVE_RULES: YuanfangNegativeRule[] = [
 ];
 
 export const YUANFANG_VISUAL_RULE_CONSUMER_MAPPING: Record<YuanfangRuleConsumer, string[]> = {
-  L3_BACKGROUND: ["benchmark family", "visual density", "layout grammar", "safe-zone policy", "negative rules"],
-  L4_SPATIAL: ["title-safe zone", "logo-safe zone", "composition intent"],
+  L3_BACKGROUND: ["benchmark family", "visual density", "layout grammar", "style treatment", "canvas intent", "logo strategy hint", "safe-zone policy", "negative rules"],
+  L4_SPATIAL: ["title-safe zone", "logo-safe zone", "logo strategy hint", "composition intent"],
   L5_PRIMARY_MESSAGE: ["family-specific hook rules", "themeClarity", "aiGenericRisk"],
   L6_TITLE: ["title dominance", "layout grammar", "title lockup expectation", "hook/subtitle priority"],
 };
@@ -123,6 +128,9 @@ export const YUANFANG_VISUAL_RULE_LAYER: YuanfangVisualRuleLayer = {
   families: YUANFANG_VISUAL_BENCHMARK_FAMILIES,
   dimensions: YUANFANG_RULE_DIMENSIONS,
   layouts: YUANFANG_LAYOUT_GRAMMAR,
+  logoStrategies: YUANFANG_LOGO_STRATEGIES,
+  canvasIntents: YUANFANG_CANVAS_INTENTS,
+  styleTreatments: YUANFANG_STYLE_TREATMENTS,
   titleRules: YUANFANG_TITLE_RULES,
   backgroundRules: YUANFANG_BACKGROUND_RULES,
   negativeRules: YUANFANG_NEGATIVE_RULES,

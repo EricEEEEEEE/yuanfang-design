@@ -36,6 +36,30 @@ export type YuanfangLayoutGrammarKey =
   | "splitColorBlock"
   | "frameContainer";
 
+export type YuanfangLogoStrategyKey =
+  | "colorFullLockup"
+  | "whiteLockup"
+  | "deepBlueLockup"
+  | "repositionPreferred"
+  | "minimalProtectionPatch";
+
+export type YuanfangCanvasIntentKey =
+  | "verticalPoster"
+  | "horizontalKeyVisual"
+  | "squareSocial";
+
+export type YuanfangAspectRatioClass = "vertical" | "horizontal" | "square";
+
+export type YuanfangStyleTreatmentKey =
+  | "brandKineticKV"
+  | "boldEnrollmentCampaign"
+  | "literaryEditorialCollage"
+  | "modernGuofengInk"
+  | "warmAchievementStage"
+  | "campusHonorFormal"
+  | "techBlueLearning"
+  | "premiumMinimalNotice";
+
 export type YuanfangRuleConsumer = "L3_BACKGROUND" | "L4_SPATIAL" | "L5_PRIMARY_MESSAGE" | "L6_TITLE";
 
 export type YuanfangRuleDimension = {
@@ -56,6 +80,9 @@ export type YuanfangVisualBenchmarkFamily = {
   visualRequirements: string[];
   requiredDimensions: YuanfangRuleDimensionKey[];
   preferredLayouts: YuanfangLayoutGrammarKey[];
+  preferredStyleTreatments: YuanfangStyleTreatmentKey[];
+  preferredCanvasIntents: YuanfangCanvasIntentKey[];
+  logoStrategyHints: YuanfangLogoStrategyKey[];
   forbiddenSignals: string[];
   primaryMotifs: string[];
   titleExpectation: string;
@@ -70,8 +97,37 @@ export type YuanfangLayoutGrammar = {
   visualSubjectPlacement: string;
   logoSafeZone: string;
   titleSafeZone: string;
-  canvasSuitability: Array<"vertical" | "horizontal">;
+  canvasSuitability: YuanfangAspectRatioClass[];
   forbiddenWhen: string[];
+};
+
+export type YuanfangLogoStrategy = {
+  key: YuanfangLogoStrategyKey;
+  label: string;
+  logoVariantHint: string;
+  placementCandidates: string[];
+  protectionPolicy: string;
+  promptGuidance: string;
+  forbiddenSignals: string[];
+};
+
+export type YuanfangCanvasIntent = {
+  key: YuanfangCanvasIntentKey;
+  label: string;
+  aspectRatioClass: YuanfangAspectRatioClass;
+  futureCanvas: string;
+  suitableFor: string[];
+  promptGuidance: string;
+};
+
+export type YuanfangStyleTreatment = {
+  key: YuanfangStyleTreatmentKey;
+  label: string;
+  suitableFamilies: YuanfangVisualFamilyKey[];
+  promptGuidance: string;
+  colorEnergy: string;
+  motifTreatment: string;
+  avoid: string[];
 };
 
 export type YuanfangTitleRule = {
@@ -105,6 +161,9 @@ export type YuanfangVisualRuleLayer = {
   families: Record<YuanfangVisualFamilyKey, YuanfangVisualBenchmarkFamily>;
   dimensions: Record<YuanfangRuleDimensionKey, YuanfangRuleDimension>;
   layouts: Record<YuanfangLayoutGrammarKey, YuanfangLayoutGrammar>;
+  logoStrategies: Record<YuanfangLogoStrategyKey, YuanfangLogoStrategy>;
+  canvasIntents: Record<YuanfangCanvasIntentKey, YuanfangCanvasIntent>;
+  styleTreatments: Record<YuanfangStyleTreatmentKey, YuanfangStyleTreatment>;
   titleRules: YuanfangTitleRule[];
   backgroundRules: YuanfangBackgroundRule[];
   negativeRules: YuanfangNegativeRule[];
