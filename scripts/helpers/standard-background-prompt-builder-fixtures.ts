@@ -81,6 +81,75 @@ export const AVOID_STRESS = context({
   hook: "阅读",
 });
 
+export const VALID_NEW_THEME_FIXTURES = [
+  ["world book day", context({
+    productOutputType: "festival",
+    eventBrief: "世界读书日当天，鼓励孩子走进书本、分享阅读感受、和同伴一起发现文学世界。",
+    styleBrief: "温暖、有书香气、国际阅读日氛围，不要像普通图书馆宣传。",
+    visualDetails: "地球、书本、阅读灯光、孩子想象中的文学世界、打开的书页像通往远方的门。",
+    titleBrief: "突出阅读点亮世界。",
+    avoidNotes: "不要真实儿童照片，不要图书馆借阅通知感，不要生成文字。",
+    mainTitle: "阅读点亮世界",
+    subtitle: "世界读书日特别活动",
+    hook: "阅读点亮世界",
+  })],
+  ["debate contest", context({
+    productOutputType: "parentNotice",
+    eventBrief: "校区举办小学生辩论赛，展示孩子思辨表达、团队合作和舞台发言。",
+    styleBrief: "有比赛感、舞台感、思辨感，但不要太严肃。",
+    visualDetails: "辩论台、麦克风、对话气泡、聚光灯、两组队伍的抽象对阵感。",
+    titleBrief: "突出勇敢表达和思辨能力成长。",
+    avoidNotes: "不要真实儿童照片，不要法律法庭风，不要生成文字。",
+    mainTitle: "小小辩论赛",
+    subtitle: "让观点勇敢发声",
+    hook: "辩论赛",
+  })],
+  ["parent-child reading night", context({
+    productOutputType: "socialPost",
+    eventBrief: "周五晚上开展亲子共读活动，家长和孩子一起阅读文学故事。",
+    styleBrief: "温暖、夜晚、治愈、有文学感，但不要太幼稚。",
+    visualDetails: "月光、窗边、书本、柔和灯光、亲子阅读的抽象剪影。",
+    titleBrief: "突出亲子陪伴和阅读习惯。",
+    avoidNotes: "不要真实人物照片，不要低幼绘本风，不要生成文字。",
+    mainTitle: "亲子共读夜",
+    subtitle: "把故事读给月亮听",
+    hook: "亲子共读",
+  })],
+  ["speech open class", context({
+    productOutputType: "enrollment",
+    eventBrief: "演讲表达公开课，让孩子练习站上舞台、组织观点、清楚表达自己的想法。",
+    styleBrief: "有舞台感、有成长感、有公开课招生感，不要廉价培训广告风。",
+    visualDetails: "舞台、聚光灯、麦克风、表达能量、向上的成长线条。",
+    titleBrief: "突出孩子表达力成长。",
+    avoidNotes: "不要真实儿童照片，不要成功学海报风，不要生成文字。",
+    mainTitle: "少年演讲公开课",
+    subtitle: "站上舞台，表达自己",
+    hook: "演讲表达公开课",
+  })],
+  ["flying flower poetry challenge", context({
+    productOutputType: "festival",
+    eventBrief: "校区组织古诗飞花令挑战活动，孩子通过诗词接龙和互动游戏感受古诗之美。",
+    styleBrief: "国风、春天、诗词、活动感，画面要灵动，不要老气。",
+    visualDetails: "春天花枝、诗词卷轴、团扇、书页、轻盈的国风动线。",
+    titleBrief: "标题有挑战感和诗词美感。",
+    avoidNotes: "不要土味红金，不要复杂书法字，不要生成文字。",
+    mainTitle: "飞花令挑战",
+    subtitle: "在诗词里遇见春天",
+    hook: "飞花令挑战",
+  })],
+  ["winter reading camp", context({
+    productOutputType: "enrollment",
+    eventBrief: "寒假阅读营，孩子集中阅读经典故事、分享读后感、完成表达作品。",
+    styleBrief: "冬日、温暖、阅读、成长，有招生活动感，但不要廉价促销。",
+    visualDetails: "冬日暖光、书本、雪花、窗户、孩子想象中的故事世界。",
+    titleBrief: "让家长感到温暖、有价值。",
+    avoidNotes: "不要圣诞老人，不要西方节日符号，不要生成文字。",
+    mainTitle: "寒假阅读营",
+    subtitle: "让假期长出文学的翅膀",
+    hook: "寒假阅读营",
+  })],
+] as const;
+
 export function context(input: {
   productOutputType: StandardImagePromptContext["form"]["productOutputType"];
   eventBrief: string; styleBrief: string; visualDetails?: string; titleBrief: string; avoidNotes?: string;

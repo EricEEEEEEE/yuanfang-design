@@ -55,6 +55,13 @@ export type YuanfangTitleSafeGeometryShape =
   | "spotlightPatch"
   | "editorialMargin";
 
+export type YuanfangTitleSafeRenderMode =
+  | "implicitNegativeSpace"
+  | "embeddedQuietPocket"
+  | "edgeLowDetailPocket"
+  | "motionPathReserve"
+  | "backgroundIntegratedReserve";
+
 export type YuanfangTitleSafeGeometry = {
   maxCanvasAreaRatio: number;
   preferredAreaRatioRange: [number, number];
@@ -76,6 +83,14 @@ export type YuanfangAntiPatternKey =
   | "centralPaperSheetDominance"
   | "titleSafeAreaOver40Percent"
   | "disconnectedTitleIsland"
+  | "visibleTitleContainer"
+  | "titleCardArtifact"
+  | "standaloneBlankPaper"
+  | "oversizedTextPlaque"
+  | "fullHeightSideWall"
+  | "centralDocumentDominance"
+  | "labelPatchForTitle"
+  | "emptyContainerForText"
   | "lowerOnlyDecoration"
   | "softPastelSameness"
   | "fakeLogoPatch"
@@ -94,6 +109,7 @@ export type YuanfangDesignDecision = {
   selectedLogoStrategy: YuanfangLogoStrategyKey;
   selectedTitleSafeDesign: YuanfangTitleSafeDesignKey;
   selectedVisualSubjectPlan: YuanfangVisualSubjectPlanKey;
+  overlayReserveMode: YuanfangTitleSafeRenderMode;
   titleSafeGeometry: YuanfangTitleSafeGeometry;
   titleSafeDesignPlan: string;
   logoSafeDesign: string;
