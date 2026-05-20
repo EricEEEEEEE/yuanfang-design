@@ -37,6 +37,8 @@ The expected direction is:
 - stable Yuanfang VI feeling
 - usable poster output for teachers and campuses
 
+Direct benchmark calibration adds one important correction: Yuanfang is not default guofeng. Real thumbnails span modernBrandCampaign, techDarkEducationKV, boldEnrollmentPromo, kidsLiteraryCharacterEvent, freshReadingCourse, campusHonorCompetition, modernGuofengLiterature, and lifestyleLiteraryScene. Guofeng is only for explicit poetry, traditional culture, festival literature, or classical-culture briefs.
+
 ## Programmatic Sources
 
 - `src/models/yuanfang-visual-rules.ts`
@@ -163,9 +165,9 @@ Required negative rules include:
 
 ## Future Consumer Mapping
 
-L3 background prompt builder should consume benchmark family, visual density, layout grammar, safe-zone policy, and negative rules.
+L3 background prompt builder should consume benchmark family, visual density, layout grammar, visual family, subject plan, and negative rules. It should generate a complete campaign key visual / event poster composition, not a visible title-safe container.
 
-L4 spatial strategy should consume title-safe zone, logo-safe zone, and composition intent.
+L4 spatial strategy should consume natural lower-complexity regions, logo-safe zone, and composition intent.
 
 L5 primaryMessage should consume family-specific hook rules.
 

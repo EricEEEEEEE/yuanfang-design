@@ -1,18 +1,9 @@
 import { YUANFANG_VISUAL_RULE_LAYER } from "@/config/yuanfang-design-rules";
-import type {
-  YuanfangAntiPatternKey,
-  YuanfangCompositionFamilyKey,
-  YuanfangDesignDecision,
-  YuanfangTitleSafeRenderMode,
-  YuanfangTitleSafeGeometry,
-  YuanfangTitleSafeDesignKey,
-  YuanfangVisualFamilyDecisionKey,
-  YuanfangVisualSubjectPlanKey,
-} from "@/models/yuanfang-design-decision";
+import type { YuanfangAntiPatternKey, YuanfangCompositionFamilyKey, YuanfangDesignDecision, YuanfangTitleSafeRenderMode, YuanfangTitleSafeGeometry, YuanfangTitleSafeDesignKey, YuanfangVisualFamilyDecisionKey, YuanfangVisualSubjectPlanKey } from "@/models/yuanfang-design-decision";
 import type { StandardImagePromptContext } from "@/models/standard-background-generation";
 import type { YuanfangLayoutGrammarKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
 import type { ResolvedYuanfangVisualRules } from "@/services/helpers/yuanfang-visual-rule-resolver";
-import { hasAny, splitAvoidNotes } from "@/services/helpers/standard-background-prompt-utils";
+import { hasAny, positiveBriefText, splitAvoidNotes } from "@/services/helpers/standard-background-prompt-utils";
 
 export function resolveYuanfangDesignDecision(
   context: StandardImagePromptContext,
@@ -28,7 +19,7 @@ export function resolveYuanfangDesignDecision(
     decisionSource: "yuanfang-design-decision-v1",
     benchmarkFamily: rules.family.key,
     layoutGrammar: rules.layout.key,
-    selectedVisualFamily: visualFamily(rules.family.key, rules.selectedStyleTreatment),
+    selectedVisualFamily: visualFamily(context, rules.family.key, rules.selectedStyleTreatment),
     selectedCompositionFamily: composition,
     selectedStyleTreatment: rules.selectedStyleTreatment,
     selectedCanvasIntent: rules.selectedCanvasIntent,
@@ -51,14 +42,17 @@ export function resolveYuanfangDesignDecision(
   };
 }
 
-function visualFamily(family: YuanfangVisualFamilyKey, style: string): YuanfangVisualFamilyDecisionKey {
-  if (style === "techBlueLearning") return "techLearningVisual";
-  if (family === "brandEvent" || family === "companyActivity") return "brandEventKV";
-  if (family === "enrollment" || family === "openClass") return "enrollmentCampaign";
-  if (family === "literaryActivity") return "literaryCourseVisual";
-  if (family === "poetryFestival" || family === "guofengLiterature") return "guofengLiteratureVisual";
+function visualFamily(context: StandardImagePromptContext, family: YuanfangVisualFamilyKey, style: string): YuanfangVisualFamilyDecisionKey {
+  const text = positiveBriefText(context);
+  if (style === "techBlueLearning") return "techDarkEducationKV";
+  if (family === "brandEvent" || family === "companyActivity") return "modernBrandCampaign";
   if (family === "achievementShowcase") return "achievementShowcaseVisual";
-  if (family === "teachingCompetition" || family === "campusActivity") return "campusHonorVisual";
+  if (family === "teachingCompetition" || family === "campusActivity") return "campusHonorCompetition";
+  if (family === "poetryFestival" || family === "guofengLiterature") return "modernGuofengLiterature";
+  if (hasAny(text, ["四大名著", "大唐", "三国", "西游", "儿童互动", "趣味活动", "角色", "IP", "游记"])) return "kidsLiteraryCharacterEvent";
+  if (hasAny(text, ["亲子", "窗边", "夜晚", "咖啡", "陪伴", "生活方式"])) return "lifestyleLiteraryScene";
+  if (family === "literaryActivity") return "freshReadingCourse";
+  if (family === "enrollment" || family === "openClass") return "boldEnrollmentPromo";
   return "premiumNoticeVisual";
 }
 
@@ -109,8 +103,8 @@ function antiPatterns(family: YuanfangVisualFamilyKey, titleSafe: YuanfangTitleS
 function densityPlan(composition: YuanfangCompositionFamilyKey): string {
   if (composition === "stageDepthComposition" || composition === "posterCardComposition") return "stage depth with side displays, layered light, podium planes, and readable calm areas";
   if (composition === "diagonalMomentumComposition") return "diagonal motion layers with a clear non-text hero subject";
-  if (composition === "layeredCollageComposition") return "layered editorial foreground, midground motif, and embedded quiet visual pocket";
-  if (composition === "verticalSealComposition") return "modern guofeng layers around a narrow seal-side low-detail pocket with adjacent breathing room";
+  if (composition === "layeredCollageComposition") return "layered editorial foreground, midground motif, and campaign depth without a visible text holder";
+  if (composition === "verticalSealComposition") return "modern guofeng layers with natural calmer gradients, not a plaque or title container";
   return "3-5 controlled layers with designed safe zones and visible family motif";
 }
 
@@ -190,9 +184,9 @@ function differentiationPlan(family: YuanfangVisualFamilyKey, subjectPlan: Yuanf
 
 function promptDirectives(composition: YuanfangCompositionFamilyKey, mode: YuanfangTitleSafeRenderMode, subjectPlan: YuanfangVisualSubjectPlanKey, geometry: YuanfangTitleSafeGeometry): string[] {
   return [
-    "Use this as a designed poster key visual composition, not a generic illustration.",
+    "Use this as a complete campaign key visual and event poster composition, not a generic illustration.",
     `The composition should visibly follow ${composition}.`,
-    `Create an implicit overlay reserve using ${mode}: a low-detail pocket that is visually integrated, not a separate object, with background subject remains primary; maxCanvasAreaRatio ${geometry.maxCanvasAreaRatio}.`,
+    `Do not create a title holder; let calmer lower-complexity regions occur naturally inside ${mode} while the campaign subject remains primary.`,
     `The main visual subject plan is ${subjectPlan}; make it the largest non-text visual memory point.`,
     "Avoid visibleTitleContainer, titleCardArtifact, standaloneBlankPaper, oversizedTextPlaque, fullHeightSideWall, centralDocumentDominance, labelPatchForTitle, emptyContainerForText, and older blank-zone artifacts.",
   ];

@@ -4,7 +4,7 @@ import { STANDARD_LAYOUT_FAMILIES } from "@/config/layout-families";
 import type { StandardBackgroundPromptBuildInput, StandardBackgroundPromptBuildResult, StandardImagePromptContext } from "@/models/standard-background-generation";
 import type { YuanfangLayoutGrammarKey, YuanfangVisualFamilyKey } from "@/models/yuanfang-visual-rules";
 import { buildStandardBackgroundVisualRuleContext, type StandardBackgroundVisualRuleContext } from "@/services/helpers/standard-background-visual-rule-adapter";
-import { BENCHMARK_FAMILIES, BENCHMARK_STANDARD, FORBIDDEN_ELEMENTS, PRODUCT_LABELS, PROMPT_VERSION, TEMPLATE_SOURCES } from "@/services/helpers/standard-background-prompt-policy";
+import { BENCHMARK_FAMILIES, FORBIDDEN_ELEMENTS, PRODUCT_LABELS, PROMPT_VERSION, TEMPLATE_SOURCES } from "@/services/helpers/standard-background-prompt-policy";
 import { type BaseTemplate, loadTemplates, type TemplateKeys } from "@/services/helpers/standard-background-prompt-templates";
 import { allBriefText, buildWarnings, consumedFields, formatPalette, hasAny, sha256, splitAvoidNotes, unique } from "@/services/helpers/standard-background-prompt-utils";
 
@@ -70,13 +70,13 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
   const element = templates.elements[keys.element];
   return [
     "Background visual only, not a final poster.",
-    "Create a professional education-brand poster background for Yuanfang Standard Form v2.",
-    BENCHMARK_STANDARD,
+    "Create a complete campaign key visual / event poster background composition for Yuanfang Standard Form v2.",
+    "Benchmark target: complete event KV with strong subject, brand color energy, clear activity type, rich controlled density, and no visible title container.",
     BENCHMARK_FAMILIES[context.form.productOutputType],
     "Do not generate readable Chinese text. Do not generate title text. Do not generate logo. Do not generate mascot.",
     "Do not generate QR code, campus phone, address, name, watermark, or any contact information.",
-    "Use the selected L2 layout grammar below; avoid centerBlankBoard, tinyFloatingTitle, and lower-only decorative pile patterns.",
-    "Create an implicit overlay reserve for the later system title: a low-detail pocket that is visually integrated into the background, not a separate object; background subject remains primary; avoid detailed objects, faces, icons, strong contrast, or text-like patterns inside that pocket.",
+    "Use the selected L2 layout grammar below; avoid centerBlankBoard, tinyFloatingTitle, lower-only decorative pile patterns, and decorative-border-plus-central-card layouts.",
+    "Focus on the complete activity KV first. L4 spatial analysis will later choose usable calmer regions from the finished image; do not make an empty prepared text-holder composition.",
     "Reserve logo-safe zones according to the selected logo strategy. Do not generate logo. Do not default to a white logo patch unless the selected strategy explicitly asks for minimalProtectionPatch.",
     context.constraints.reserveMascotSpace ? "Leave optional small mascot compositing space, but do not generate the mascot." : "",
     context.constraints.reserveCampusInfoSpace ? "Leave optional information compositing space, but do not generate campus text." : "",
@@ -86,7 +86,7 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     `Main visual theme anchor: ${hook || context.form.productOutputType}.`,
     hook ? "Use the visualHook as the main background theme anchor; translate it into visual symbols, space, color, and atmosphere without writing the words." : "",
     context.visualHook?.mismatchReason ? `Visual hook note: ${context.visualHook.mismatchReason}` : "",
-    `Title content is for spacing only, rendered later by the title system: ${context.title.mainTitle}${context.title.subtitle ? ` / ${context.title.subtitle}` : ""}. Do not draw these words.`,
+    `Title content is rendered later by the title system and is reference-only for theme understanding: ${context.title.mainTitle}${context.title.subtitle ? ` / ${context.title.subtitle}` : ""}. Do not draw these words or allocate a visible container for them.`,
     "",
     "Creative brief from the user:",
     `- eventBrief: ${context.form.eventBrief}`,
@@ -123,10 +123,10 @@ function buildPrompt(context: StandardImagePromptContext, templates: ReturnType<
     "Extract 2-4 unique memory points from eventBrief, styleBrief, visualDetails, and visualHook.",
     "Translate them into background composition, symbolic objects, depth, light, material, and movement.",
     "Match the benchmark family instead of making a generic illustration, stock education poster, flat gradient, or decorative wallpaper.",
-    "Keep theme visuals memorable but controlled; keep detailed objects outside the implicit overlay reserve and logo-safe zone; avoid clutter and excessive text-like patterns.",
-    "The low-detail pocket must emerge from existing light, motion, book edge, stage depth, landscape haze, or brand color movement; it must not become the main visual object.",
+    "Keep theme visuals memorable but controlled; let calmer regions happen naturally through light, depth, motion, and color balance without naming or drawing a text container.",
+    "The output should feel like a finished Yuanfang campaign KV background, not an illustration with a prepared empty area.",
     "Avoid visibleTitleContainer, titleCardArtifact, standaloneBlankPaper, oversizedTextPlaque, fullHeightSideWall, centralDocumentDominance, labelPatchForTitle, emptyContainerForText, oversizedTitleSafeBoard, and centerBlankBoard patterns.",
-    templates.base.layoutPrompt,
+    "Composition must be a complete activity KV: strong subject, branded color rhythm, varied layout, and natural calmer regions created by the scene itself; do not build a prepared text container.",
   ].filter(Boolean).join("\n");
 }
 
@@ -151,7 +151,7 @@ function resolveTemplateKeys(context: StandardImagePromptContext, visualRules: S
   const text = allBriefText(context);
   const designFamily = designFamilyFor(visualRules.selectedBenchmarkFamily);
   const layoutFamily = layoutFamilyFor(visualRules.selectedLayoutGrammar);
-  const classical = hasAny(text, ["四大名著", "国学", "诗词", "名著", "传统", "古典"]);
+  const classical = hasAny(text, ["国风", "国学", "诗词", "古诗", "飞花令", "端午", "传统文化", "古典", "水墨"]);
   const launch = hasAny(text, ["发布会", "品牌升级", "课程发布", "周年", "公司活动", "发布"]);
   const festival = context.form.productOutputType === "festival";
   const showcase = context.form.productOutputType === "achievementShowcase" || context.form.productOutputType === "classReview";

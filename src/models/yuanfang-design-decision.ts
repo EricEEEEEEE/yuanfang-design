@@ -7,6 +7,14 @@ import type {
 } from "@/models/yuanfang-visual-rules";
 
 export type YuanfangVisualFamilyDecisionKey =
+  | "modernBrandCampaign"
+  | "techDarkEducationKV"
+  | "boldEnrollmentPromo"
+  | "kidsLiteraryCharacterEvent"
+  | "freshReadingCourse"
+  | "campusHonorCompetition"
+  | "modernGuofengLiterature"
+  | "lifestyleLiteraryScene"
   | "brandEventKV"
   | "enrollmentCampaign"
   | "literaryCourseVisual"

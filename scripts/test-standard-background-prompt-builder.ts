@@ -46,8 +46,8 @@ function main() {
     ["aiWriting", aiWriting],
   ]);
   const checks = [
-    ["STANDARD_BACKGROUND_BENCHMARK_LANGUAGE_CHECK", hasAll(four.prompt, ["Yuanfang education-brand key visual benchmark", "visual density", "primary visual hook", "title-safe", "logo-safe"])],
-    ["STANDARD_BACKGROUND_SAFE_ZONE_PROTECTION_CHECK", hasAll(four.prompt, ["selected L2 layout grammar", "implicit overlay reserve", "low-detail pocket", "visually integrated", "not a separate object", "background subject remains primary"])],
+    ["STANDARD_BACKGROUND_BENCHMARK_LANGUAGE_CHECK", hasAll(four.prompt, ["complete campaign key visual", "event poster", "Primary visual hook"])],
+    ["STANDARD_BACKGROUND_SPATIAL_HANDOFF_CHECK", hasAll(four.prompt, ["L4 spatial analysis", "complete activity KV", "natural calmer regions"])],
     ["STANDARD_BACKGROUND_FOUR_CLASSICS_THEME_CHECK", hasAll(four.prompt, ["四大名著", "书籍", "国风"])],
     ["STANDARD_BACKGROUND_NO_TEXT_POLICY_CHECK", hasAll(four.prompt, ["Background visual only", "not a final poster", "Do not generate readable", "Do not generate title"])],
     ["STANDARD_BACKGROUND_NO_LOGO_POLICY_CHECK", hasAll(four.prompt, ["Do not generate logo", "Logo is composited later"])],
@@ -61,16 +61,17 @@ function main() {
     ["STANDARD_BACKGROUND_DIVERSITY_LANGUAGE_CHECK", hasAll(brandEvent.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "Yuanfang design decision", "Do not generate logo"])],
     ["STANDARD_BACKGROUND_AI_WRITING_TREATMENT_CHECK", hasAll(aiWriting.prompt, ["AI作文批改", "techBlueLearning", "blue learning technology"])],
     ["STANDARD_BACKGROUND_AVOID_STRESS_CHECK", hasAll(avoid.negativePrompt, ["真实照片", "日漫", "水印", "二维码", "廉价广告"])],
-    ["STANDARD_BACKGROUND_TITLE_SAFE_NO_VISIBLE_CONTAINER_WORDING_CHECK", semanticSamples.every((sample) => !hasAnyPrompt(sample.prompt, ["title field", "title card", "blank paper", "empty plaque", "large blank", "central document", "full-height side panel", "spotlight curtain"]))],
-    ["STANDARD_BACKGROUND_TITLE_SAFE_IMPLICIT_RESERVE_CHECK", semanticSamples.every((sample) => hasAll(sample.prompt, ["implicit overlay reserve", "low-detail pocket", "visually integrated", "not a separate object", "background subject remains primary"]))],
-    ["STANDARD_BACKGROUND_TITLE_SAFE_GEOMETRY_CHECK", semanticSamples.every((sample) => hasAll(sample.prompt, ["titleSafeGeometry", "maxCanvasAreaRatio", "preferredAreaRatioRange", "implicit overlay reserve"]))],
-    ["STANDARD_BACKGROUND_TITLE_SAFE_OVERSIZE_GUARD_CHECK", semanticSamples.every((sample) => hasAll(sample.prompt, ["visibleTitleContainer", "titleCardArtifact", "standaloneBlankPaper", "oversizedTextPlaque", "fullHeightSideWall", "centralDocumentDominance", "labelPatchForTitle"]))],
-    ["STANDARD_BACKGROUND_PER_TITLE_SAFE_CONSTRAINT_CHECK", hasAll(four.prompt, ["embedded quiet editorial margin", "not a separate object"]) && hasAll(achievement.prompt, ["localized calm patch", "stage objects dominant"]) && hasAll(festival.prompt, ["seal-side quiet pocket"]) && hasAll(teachingCompetition.prompt, ["narrow low-detail side pocket"])],
+    ["STANDARD_BACKGROUND_NO_TITLE_SAFE_CONTAINER_LANGUAGE_CHECK", semanticSamples.every((sample) => !hasAnyPrompt(sample.prompt, ["title field", "title card", "blank paper", "empty plaque", "large blank", "central document", "full-height side panel", "spotlight curtain", "implicit overlay reserve", "low-detail pocket", "title-safe"]))],
+    ["STANDARD_BACKGROUND_COMPLETE_KV_CHECK", semanticSamples.every((sample) => hasAll(sample.prompt, ["complete campaign key visual", "event poster composition"]) || hasAll(sample.prompt, ["complete activity KV", "campaign KV background"]))],
+    ["STANDARD_BACKGROUND_VISIBLE_CONTAINER_NEGATIVE_CHECK", semanticSamples.every((sample) => hasAll(sample.negativePrompt, ["do not draw a title card", "do not draw a blank paper sheet for text", "do not draw a visible empty title container"]))],
     ["STANDARD_BACKGROUND_TEXT_POLLUTION_GUARD_CHECK", hasAll(aiWriting.negativePrompt, ["fake UI labels", "fake certificate words", "fake document paragraphs", "wall poster text blocks", "pseudo text rows", "fake handwritten lines"])],
-    ["STANDARD_BACKGROUND_FESTIVAL_VERTICAL_SEAL_STABILITY_CHECK", hasAll(festival.prompt, ["verticalSealComposition", "framedPlaqueTitleArea", "seal-side quiet pocket", "adjacent breathing room"])],
+    ["STANDARD_BACKGROUND_FESTIVAL_VERTICAL_SEAL_STABILITY_CHECK", festival.promptDiagnostics.visualRules?.designDecision.selectedCompositionFamily === "verticalSealComposition" && !hasAnyPrompt(festival.prompt, ["empty plaque", "large blank"])],
     ["STANDARD_BACKGROUND_ACHIEVEMENT_TEACHING_DIFFERENTIATION_CHECK", visualRules.results.find((item) => item.sample === "achievement")?.selectedVisualSubjectPlan === "stageAndWorks" && visualRules.results.find((item) => item.sample === "teachingCompetition")?.selectedVisualSubjectPlan === "teachingPodiumAndHonor" && visualRules.results.find((item) => item.sample === "achievement")?.selectedCompositionFamily !== visualRules.results.find((item) => item.sample === "teachingCompetition")?.selectedCompositionFamily],
     ["STANDARD_BACKGROUND_VALID_NEW_THEME_FIXTURES_CHECK", validThemes.length === 6 && VALID_NEW_THEME_FIXTURES.every(([, item]) => ["festival", "parentNotice", "socialPost", "enrollment"].includes(item.form.productOutputType))],
-    ["STANDARD_BACKGROUND_VALID_NEW_THEME_PROMPT_CHECK", validThemes.every(([, sample]) => hasAll(sample.prompt, ["implicit overlay reserve", "low-detail pocket"]) && hasAll(sample.negativePrompt, ["do not draw a title card", "do not draw a blank paper sheet for text", "do not draw a visible empty title container"]))],
+    ["STANDARD_BACKGROUND_VALID_NEW_THEME_PROMPT_CHECK", validThemes.every(([, sample]) => hasAll(sample.prompt, ["complete campaign key visual", "L4 spatial analysis"]) && hasAll(sample.negativePrompt, ["do not draw a title card", "do not draw a blank paper sheet for text", "do not draw a visible empty title container"]))],
+    ["STANDARD_BACKGROUND_READING_NOT_GUOFENG_BY_DEFAULT_CHECK", readingNotGuofeng(validThemes)],
+    ["STANDARD_BACKGROUND_GUOFENG_REQUIRES_STRONG_SIGNAL_CHECK", styleOf("flying flower poetry challenge", validThemes) === "modernGuofengInk" && styleOf("world book day", validThemes) !== "modernGuofengInk"],
+    ["STANDARD_BACKGROUND_DIRECT_BENCHMARK_FAMILY_COVERAGE_CHECK", new Set(semanticSamples.map((item) => item.promptDiagnostics.visualRules?.designDecision.selectedVisualFamily)).size >= 7],
   ];
   const qa = [
     ["fourClassicsEnrollment", qualitySummary(four.prompt, four.negativePrompt)],
@@ -113,7 +114,7 @@ function qualitySummary(prompt: string, negativePrompt: string): Record<string, 
     themeVisible: pass(prompt, ["primary visual hook", "Main visual theme anchor"]),
     designDensity: pass(prompt, ["visual density", "3-5 controlled layers"]),
     yuanfangBrand: pass(prompt, ["Yuanfang", "brand color", "education-brand"]),
-    titleSafe: pass(prompt, ["implicit overlay reserve", "low-detail pocket", "maxCanvasAreaRatio"]),
+    titleSafe: pass(prompt, ["L4 spatial analysis", "natural calmer regions", "complete activity KV"]),
     logoSafe: pass(prompt, ["logo-safe", "top-right"]),
     noTextPolicy: pass(prompt + negativePrompt, ["Do not generate readable", "fake Chinese characters"]),
     genericGuard: pass(negativePrompt, ["generic AI art", "blank placeholder"]),
@@ -122,12 +123,12 @@ function qualitySummary(prompt: string, negativePrompt: string): Record<string, 
 
 function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildResult]>): { results: Record<string, string>[]; checks: Array<[string, boolean]> } {
   const expected: Record<string, { families: string[]; motif: string; visual: string; composition: string; subject: string }> = {
-    fourClassics: { families: ["literaryActivity", "enrollment", "openClass"], motif: "书页空间", visual: "literaryCourseVisual", composition: "layeredCollageComposition", subject: "booksAndCharacters" },
+    fourClassics: { families: ["literaryActivity", "enrollment", "openClass"], motif: "书页空间", visual: "kidsLiteraryCharacterEvent", composition: "layeredCollageComposition", subject: "booksAndCharacters" },
     achievement: { families: ["achievementShowcase"], motif: "舞台光", visual: "achievementShowcaseVisual", composition: "stageDepthComposition", subject: "stageAndWorks" },
-    festival: { families: ["poetryFestival", "guofengLiterature"], motif: "诗卷", visual: "guofengLiteratureVisual", composition: "verticalSealComposition", subject: "guofengLandscapeAndScroll" },
-    brandEvent: { families: ["brandEvent", "companyActivity"], motif: "品牌色带", visual: "brandEventKV", composition: "splitColorBlockComposition", subject: "brandLightTrailAndStage" },
-    teachingCompetition: { families: ["teachingCompetition", "campusActivity"], motif: "作品墙", visual: "campusHonorVisual", composition: "posterCardComposition", subject: "teachingPodiumAndHonor" },
-    aiWriting: { families: ["openClass", "enrollment"], motif: "课程入口", visual: "techLearningVisual", composition: "diagonalMomentumComposition", subject: "techWritingInterfaceAbstraction" },
+    festival: { families: ["poetryFestival", "guofengLiterature"], motif: "诗卷", visual: "modernGuofengLiterature", composition: "verticalSealComposition", subject: "guofengLandscapeAndScroll" },
+    brandEvent: { families: ["brandEvent", "companyActivity"], motif: "品牌色带", visual: "modernBrandCampaign", composition: "splitColorBlockComposition", subject: "brandLightTrailAndStage" },
+    teachingCompetition: { families: ["teachingCompetition", "campusActivity"], motif: "作品墙", visual: "campusHonorCompetition", composition: "posterCardComposition", subject: "teachingPodiumAndHonor" },
+    aiWriting: { families: ["openClass", "enrollment"], motif: "课程入口", visual: "techDarkEducationKV", composition: "diagonalMomentumComposition", subject: "techWritingInterfaceAbstraction" },
   };
   const results = samples.map(([name, sample]) => {
     const rules = sample.promptDiagnostics.visualRules;
@@ -149,9 +150,9 @@ function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildR
       layoutPresent: rules?.selectedLayoutGrammar ? "PASS" : "FAIL",
       decisionAccepted: decision?.selectedVisualFamily === expected[name]?.visual && decision?.selectedCompositionFamily === expected[name]?.composition && decision?.selectedVisualSubjectPlan === expected[name]?.subject ? "PASS" : "FAIL",
       promptContainsMotif: sample.prompt.includes(expected[name]?.motif ?? "family primary motifs") ? "PASS" : "FAIL",
-      promptContainsLayoutIntent: hasAll(sample.prompt, ["selectedLayoutGrammar", "layout title placement", "layout visual subject placement"]) ? "PASS" : "FAIL",
-      promptContainsSafeZones: hasAll(sample.prompt, ["implicit overlay reserve", "logoSafePolicy"]) ? "PASS" : "FAIL",
-      promptContainsDiversityIntent: hasAll(sample.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "selectedTitleSafeDesign", "antiPatternWarnings"]) ? "PASS" : "FAIL",
+      promptContainsLayoutIntent: hasAll(sample.prompt, ["selectedLayoutGrammar", "layout visual subject placement"]) ? "PASS" : "FAIL",
+      promptContainsSafeZones: hasAll(sample.prompt, ["L4 spatial analysis", "logoSafePolicy"]) ? "PASS" : "FAIL",
+      promptContainsDiversityIntent: hasAll(sample.prompt, ["selectedStyleTreatment", "selectedCanvasIntent", "selectedLogoStrategy", "selectedVisualFamily", "antiPatternWarnings"]) ? "PASS" : "FAIL",
       negativeContainsL2Rules: hasAll(sample.negativePrompt, ["fake Chinese characters", "fake logo", "generated mascot", "campus phone", "generic AI art", "empty placeholder gradient", "text-like patterns near title/logo zones"]) ? "PASS" : "FAIL",
       diagnosticsExposeRules: rules && decision && rules.consumedRuleKeys.length > 0 && rules.negativeRuleKeys.length > 0 && decision.antiPatternWarnings.includes("genericAIWallpaper") && decision.decisionReason ? "PASS" : "FAIL",
     };
@@ -181,12 +182,15 @@ function visualRuleChecks(samples: Array<[string, StandardBackgroundPromptBuildR
   };
 }
 
-function pass(value: string, needles: string[]): string {
-  return hasAll(value, needles) ? "PASS" : "CHECK";
+function pass(value: string, needles: string[]): string { return hasAll(value, needles) ? "PASS" : "CHECK"; }
+function hasAnyPrompt(value: string, needles: string[]): boolean { return needles.some((needle) => value.includes(needle)); }
+
+function styleOf(name: string, samples: readonly (readonly [string, StandardBackgroundPromptBuildResult])[]): string {
+  return samples.find(([sampleName]) => sampleName === name)?.[1].promptDiagnostics.visualRules?.selectedStyleTreatment ?? "";
 }
 
-function hasAnyPrompt(value: string, needles: string[]): boolean {
-  return needles.some((needle) => value.includes(needle));
+function readingNotGuofeng(samples: readonly (readonly [string, StandardBackgroundPromptBuildResult])[]): boolean {
+  return ["world book day", "parent-child reading night", "winter reading camp"].every((name) => styleOf(name, samples) !== "modernGuofengInk");
 }
 
 main();

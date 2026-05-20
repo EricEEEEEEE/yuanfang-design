@@ -89,8 +89,10 @@ function selectFamily(context: StandardImagePromptContext): YuanfangVisualFamily
   if (hasAny(text, ["教学比赛", "教师风采", "赛课", "比赛"])) return "teachingCompetition";
   if (hasAny(text, ["品牌升级", "课程体系", "课程发布", "发布会", "总部活动"])) return "brandEvent";
   if (hasAny(text, ["周年", "公司活动", "年会"])) return "companyActivity";
-  if (product === "festival" && hasAny(text, ["诗词", "端午", "节日", "传统文化"])) return "poetryFestival";
-  if (hasAny(text, ["国风", "四大名著", "国学", "名著", "古典", "山水", "卷轴"])) return product === "enrollment" ? "literaryActivity" : "guofengLiterature";
+  if (product === "festival" && hasAny(text, ["世界读书日", "阅读日", "读书节", "阅读节"])) return "literaryActivity";
+  if (product === "festival" && hasStrongGuofengSignal(text)) return "poetryFestival";
+  if (hasStrongGuofengSignal(text)) return product === "enrollment" ? "literaryActivity" : "guofengLiterature";
+  if (hasAny(text, ["四大名著", "大唐", "三国", "西游", "名著", "文学旅行", "游记", "阅读营", "亲子共读", "世界读书日"])) return "literaryActivity";
   if (product === "achievementShowcase" || product === "classReview" || hasAny(text, ["成果", "汇报", "作品墙", "表达成长"])) return "achievementShowcase";
   if (hasAny(text, ["校区活动", "校区", "家长开放日"])) return "campusActivity";
   if (product === "enrollment" && hasAny(text, ["公开课", "试听", "体验课", "线下课"])) return "openClass";
@@ -114,11 +116,16 @@ function selectStyleTreatment(context: StandardImagePromptContext, family: Yuanf
   const text = positiveBriefText(context);
   if (hasAny(text, ["AI作文", "AI 作文", "智能批改", "作文批改", "科技"])) return "techBlueLearning";
   if (family.key === "brandEvent" || family.key === "companyActivity") return "brandKineticKV";
-  if (family.key === "poetryFestival" || family.key === "guofengLiterature" || hasAny(text, ["国风", "诗词", "端午", "传统文化", "四大名著"])) return "modernGuofengInk";
+  if (family.key === "poetryFestival" || family.key === "guofengLiterature" || hasStrongGuofengSignal(text)) return "modernGuofengInk";
   if (family.key === "achievementShowcase") return "warmAchievementStage";
   if (family.key === "teachingCompetition" || family.key === "campusActivity") return "campusHonorFormal";
   if (family.key === "enrollment" || family.key === "openClass") return "boldEnrollmentCampaign";
+  if (family.key === "literaryActivity" && hasAny(text, ["亲子", "窗边", "夜晚", "咖啡", "陪伴", "生活方式"])) return "premiumMinimalNotice";
   return family.preferredStyleTreatments[stableIndex(context, family.preferredStyleTreatments.length)] ?? "literaryEditorialCollage";
+}
+
+function hasStrongGuofengSignal(text: string): boolean {
+  return hasAny(text, ["国风", "诗词", "古诗", "飞花令", "端午", "传统文化", "国学", "古典", "书法", "水墨"]);
 }
 
 function selectCanvasIntent(context: StandardImagePromptContext, family: YuanfangVisualBenchmarkFamily): YuanfangCanvasIntentKey {
