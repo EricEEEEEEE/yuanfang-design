@@ -60,14 +60,14 @@ export const FESTIVAL = context({
 
 export const BRAND_EVENT = context({
   productOutputType: "socialPost",
-  eventBrief: "花开远方发布新课程体系升级，面向校区老师和家长展示品牌活动与课程发布。",
-  styleBrief: "需要有发布会、品牌升级、课程体系焕新的感觉，视觉冲击强但仍然专业。",
-  visualDetails: "品牌色动线、发布会舞台光、课程模块、深蓝和橙红色块、清晰标题区。",
-  titleBrief: "突出品牌升级与课程发布。",
+  eventBrief: "远方文学举办十周年成长庆典，展示品牌十年的成长、课程沉淀和未来愿景。",
+  styleBrief: "热烈、现代、有品牌活动感、有庆典感，视觉冲击力强但不要廉价促销。",
+  visualDetails: "红橙品牌色块、流动光带、周年庆动线、舞台空间、品牌成长路径。",
+  titleBrief: "突出十周年和成长庆典。",
   avoidNotes: "不要过度科技感，不要夜店风。",
-  mainTitle: "花开远方发布会",
-  subtitle: "新课程体系升级",
-  hook: "品牌升级与课程发布",
+  mainTitle: "十周年成长庆典",
+  subtitle: "与远方一起走过十年",
+  hook: "十周年成长庆典",
 });
 
 export const AVOID_STRESS = context({
@@ -104,16 +104,16 @@ export const VALID_NEW_THEME_FIXTURES = [
     subtitle: "让观点勇敢发声",
     hook: "辩论赛",
   })],
-  ["parent-child reading night", context({
+  ["literary cafe", context({
     productOutputType: "socialPost",
-    eventBrief: "周五晚上开展亲子共读活动，家长和孩子一起阅读文学故事。",
-    styleBrief: "温暖、夜晚、治愈、有文学感，但不要太幼稚。",
-    visualDetails: "月光、窗边、书本、柔和灯光、亲子阅读的抽象剪影。",
-    titleBrief: "突出亲子陪伴和阅读习惯。",
-    avoidNotes: "不要真实人物照片，不要低幼绘本风，不要生成文字。",
-    mainTitle: "亲子共读夜",
-    subtitle: "把故事读给月亮听",
-    hook: "亲子共读",
+    eventBrief: "远方文学想做一张轻量图文，用咖啡馆和阅读场景表达文学的陪伴感。",
+    styleBrief: "现代、文艺、生活方式、温暖、有质感，但不要商业咖啡广告。",
+    visualDetails: "窗边、咖啡杯、书本、城市光影、阅读角落、温暖灯光。",
+    titleBrief: "像现代文学生活方式主题图。",
+    avoidNotes: "不要国风，不要山水，不要生成菜单文字。",
+    mainTitle: "文学咖啡馆",
+    subtitle: "和故事坐一会儿",
+    hook: "文学咖啡馆",
   })],
   ["speech open class", context({
     productOutputType: "enrollment",

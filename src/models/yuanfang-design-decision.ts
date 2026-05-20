@@ -70,6 +70,35 @@ export type YuanfangTitleSafeRenderMode =
   | "motionPathReserve"
   | "backgroundIntegratedReserve";
 
+export type YuanfangBackgroundRole =
+  | "titleLedPosterBase"
+  | "campaignStageBase"
+  | "subjectSupportiveScene"
+  | "graphicKVBase"
+  | "decorativeAtmosphereBase";
+
+export type YuanfangTitlePriorityMode =
+  | "titleDominant"
+  | "titleHeroExpected"
+  | "titleAndSubjectBalanced"
+  | "subjectLedButTitleClear";
+
+export type YuanfangDetailBudget = "low" | "medium" | "high";
+
+export type YuanfangVisualDominanceBudget = {
+  backgroundPrimarySubject: "30-45%";
+  futureTitleDominanceReserved: "35-50%";
+  decorativeDetailBudget: YuanfangDetailBudget;
+  highDetailZones: string;
+  titleRelevantArea: string;
+};
+
+export type YuanfangForegroundReadiness = {
+  hierarchy: string;
+  avoid: string;
+  support: string;
+};
+
 export type YuanfangTitleSafeGeometry = {
   maxCanvasAreaRatio: number;
   preferredAreaRatioRange: [number, number];
@@ -101,6 +130,10 @@ export type YuanfangAntiPatternKey =
   | "emptyContainerForText"
   | "lowerOnlyDecoration"
   | "softPastelSameness"
+  | "finishedIllustrationFocalClimax"
+  | "overDetailedCentralFocalClimax"
+  | "backgroundOverpowersTitle"
+  | "titleLayerNoDominance"
   | "fakeLogoPatch"
   | "genericAIWallpaper"
   | "tinyFloatingTitle"
@@ -115,6 +148,10 @@ export type YuanfangDesignDecision = {
   selectedStyleTreatment: YuanfangStyleTreatmentKey;
   selectedCanvasIntent: YuanfangCanvasIntentKey;
   selectedLogoStrategy: YuanfangLogoStrategyKey;
+  backgroundRole: YuanfangBackgroundRole;
+  titlePriorityMode: YuanfangTitlePriorityMode;
+  visualDominanceBudget: YuanfangVisualDominanceBudget;
+  foregroundReadiness: YuanfangForegroundReadiness;
   selectedTitleSafeDesign: YuanfangTitleSafeDesignKey;
   selectedVisualSubjectPlan: YuanfangVisualSubjectPlanKey;
   overlayReserveMode: YuanfangTitleSafeRenderMode;

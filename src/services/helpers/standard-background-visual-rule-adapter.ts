@@ -61,12 +61,12 @@ function promptLines(resolved: ResolvedYuanfangVisualRules): string[] {
     `- family visual requirements: ${family.visualRequirements.join(" / ")}`,
     `- family primary motifs: ${family.primaryMotifs.join(" / ")}`,
     `- visualDensityTarget: ${resolved.visualDensityTarget}`,
-    "- spatial handoff: generate a complete campaign key visual with natural scene hierarchy. L4 spatial analysis will choose placement later from the finished image.",
+    "- spatial handoff: generate a title-ready campaign base with natural scene hierarchy. L4 spatial analysis will choose placement later; background supports future title lockup dominance.",
     `- logoSafePolicy: ${resolved.logoSafePolicy}; protect the full future logo group, not only a tiny icon.`,
     "- do not default to a white logo patch; use a patch only when selectedLogoStrategy is minimalProtectionPatch.",
     `- family forbidden signals: ${family.forbiddenSignals.map(promptSafe).join(" / ")}`,
     `- layout forbidden cases: ${layout.forbiddenWhen.map(promptSafe).join(" / ")}`,
-    "- avoid centerBlankBoard, overblankTitleZone, visibleTitleContainer, titleCardArtifact, oversizedTitleSafeBoard, and disconnectedTitleIsland patterns.",
+    "- avoid centerBlankBoard, overblankTitleZone, visibleTitleContainer, titleCardArtifact, oversizedTitleSafeBoard, finishedIllustrationFocalClimax, overDetailedCentralFocalClimax, and disconnectedTitleIsland patterns.",
     "- avoid lower-only decorative elements; distribute theme motifs according to the selected layout grammar.",
   ];
 }

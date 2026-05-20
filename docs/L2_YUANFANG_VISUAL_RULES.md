@@ -18,7 +18,7 @@ This does not mean production readiness. It only establishes a reusable rule con
 
 ## Benchmark Interpretation
 
-Yuanfang benchmark materials are not empty backgrounds. They usually contain a clear thematic area, brand color, motion, graphic elements, background texture, safe composition, and a strong visual focus.
+Yuanfang benchmark materials are not empty backgrounds and not finished illustrations. They usually contain a title-led campaign base: clear thematic area, brand color, motion, graphic elements, background texture, safe composition, and controlled visual focus that lets the later title lockup become the hero.
 
 The expected direction is not:
 
@@ -32,12 +32,15 @@ The expected direction is:
 
 - designed campaign key visual
 - strong title asset
+- title-ready background hierarchy
 - varied composition
 - family-specific visual grammar
 - stable Yuanfang VI feeling
 - usable poster output for teachers and campuses
 
 Direct benchmark calibration adds one important correction: Yuanfang is not default guofeng. Real thumbnails span modernBrandCampaign, techDarkEducationKV, boldEnrollmentPromo, kidsLiteraryCharacterEvent, freshReadingCourse, campusHonorCompetition, modernGuofengLiterature, and lifestyleLiteraryScene. Guofeng is only for explicit poetry, traditional culture, festival literature, or classical-culture briefs.
+
+Title-ready calibration adds another correction: L3 should produce a campaign base where background primary subject is roughly 30-45%, future title dominance remains 35-50%, and high-detail clusters stay around subject groups or edges rather than completing the visual climax.
 
 ## Programmatic Sources
 
@@ -142,6 +145,8 @@ L2 background expectations:
 - motif is family-specific
 - theme is immediately visible
 - background supports title lockup
+- background does not overpower future title lockup
+- background avoids finished illustration focal climax
 - background protects logo
 - generated text, fake characters, fake logo, QR, mascot, and campus contact are forbidden
 
@@ -165,7 +170,7 @@ Required negative rules include:
 
 ## Future Consumer Mapping
 
-L3 background prompt builder should consume benchmark family, visual density, layout grammar, visual family, subject plan, and negative rules. It should generate a complete campaign key visual / event poster composition, not a visible title-safe container.
+L3 background prompt builder should consume benchmark family, visual density, layout grammar, visual family, subject plan, and negative rules. It should generate a title-ready campaign background / event poster base, not a visible title-safe container or finished illustration scene.
 
 L4 spatial strategy should consume natural lower-complexity regions, logo-safe zone, and composition intent.
 
@@ -181,8 +186,8 @@ This step does not:
 - call OpenAI
 - change API routes
 - change frontend
-- change generated background prompt builder behavior
+- change API routes, frontend, title pipeline, or Final Composer behavior
 - change title pipeline
 - change Final Composer
-- connect R2/history/DB
+- connect persistence or storage layers
 - restore raw campus fields

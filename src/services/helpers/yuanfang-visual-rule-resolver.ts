@@ -89,6 +89,7 @@ function selectFamily(context: StandardImagePromptContext): YuanfangVisualFamily
   if (hasAny(text, ["教学比赛", "教师风采", "赛课", "比赛"])) return "teachingCompetition";
   if (hasAny(text, ["品牌升级", "课程体系", "课程发布", "发布会", "总部活动"])) return "brandEvent";
   if (hasAny(text, ["周年", "公司活动", "年会"])) return "companyActivity";
+  if (hasAny(text, ["成语", "闯关", "任务卡", "故事角色", "儿童文学", "趣味活动"])) return "literaryActivity";
   if (product === "festival" && hasAny(text, ["世界读书日", "阅读日", "读书节", "阅读节"])) return "literaryActivity";
   if (product === "festival" && hasStrongGuofengSignal(text)) return "poetryFestival";
   if (hasStrongGuofengSignal(text)) return product === "enrollment" ? "literaryActivity" : "guofengLiterature";
@@ -153,7 +154,7 @@ function forcedLayout(text: string, candidates: YuanfangLayoutGrammarKey[]): Yua
     ["verticalSealTitle", ["诗词", "端午", "国风", "卷轴", "题签"]],
     ["splitColorBlock", ["品牌升级", "课程发布", "发布会", "色块"]],
     ["diagonalCampaignFlow", ["报名", "招生", "开班", "成长路径", "动线"]],
-    ["frameContainer", ["文学", "阅读", "书页", "整本书", "名著"]],
+    ["frameContainer", ["文学", "阅读", "书页", "整本书", "名著", "成语", "闯关", "故事角色"]],
   ];
   return options.find(([key, needles]) => candidates.includes(key) && hasAny(text, needles))?.[0];
 }
