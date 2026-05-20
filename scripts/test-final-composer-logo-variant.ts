@@ -3,11 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { BRAND, type BrandLogoVariantKey } from "../src/config/brand";
-import type {
-  FinalBrandLayerAsset,
-  FinalComposerInput,
-  FinalLogoVariantAsset,
-} from "../src/models/final-composer";
+import type { FinalBrandLayerAsset, FinalComposerInput, FinalLogoVariantAsset } from "../src/models/final-composer";
 import type { TitleAsset } from "../src/models/title-asset";
 import { composeFinalPoster } from "../src/services/final-composer.service";
 
@@ -19,18 +15,27 @@ async function main(): Promise<void> {
   assert(!Object.values(BRAND.logoVariants).some((item) => item.path.includes("logo-symbol")), "LOGO_SYMBOL_NOT_IN_LOCKUP_REGISTRY");
 
   const light = await runCase(await flat("#f7fbff"));
-  assert(["colorFullLockup", "deepBlueLockup"].includes(light.diagnostics.selectedLogoVariant ?? ""), "LIGHT_CLEAN_VARIANT");
+  assert(light.diagnostics.selectedLogoVariant === "colorFullLockup", "LIGHT_CLEAN_COLOR_FULL_LOCKUP");
   assert(light.diagnostics.usedProtectionPatch === false, "LIGHT_CLEAN_NO_PATCH");
+  assert(light.diagnostics.logoDecision?.colorLogoReadable === true, "LIGHT_COLOR_READABLE_DIAGNOSTIC");
+  assert(typeof light.diagnostics.logoDecision?.logoBrandFidelityScore === "number", "BRAND_FIDELITY_DIAGNOSTIC");
 
   const dark = await runCase(await flat("#06254a"));
   assert(dark.diagnostics.selectedLogoVariant === "whiteLockup", "DARK_CLEAN_WHITE_LOCKUP");
   assert(dark.diagnostics.usedProtectionPatch === false, "DARK_CLEAN_NO_PATCH");
+  assert(Boolean(dark.diagnostics.logoDecision?.rejectedColorReason), "DARK_REJECTED_COLOR_REASON");
 
   const warm = await runCase(await flat("#fff2d6"));
-  assert(warm.diagnostics.selectedLogoVariant === "deepBlueLockup", "WARM_LIGHT_DEEPBLUE");
+  assert(["colorFullLockup", "deepBlueLockup"].includes(warm.diagnostics.selectedLogoVariant ?? ""), "WARM_LIGHT_COLOR_OR_DEEPBLUE");
+  assert(warm.diagnostics.selectedLogoVariant !== "whiteLockup", "WARM_LIGHT_NOT_WHITE");
   assert(warm.diagnostics.usedProtectionPatch === false, "WARM_LIGHT_NO_PATCH");
 
+  const mediumBlue = await runCase(await flat("#8fc9ec"));
+  assert(mediumBlue.diagnostics.selectedLogoVariant === "colorFullLockup", "MEDIUM_BLUE_READABLE_COLOR_BEATS_WHITE");
+  assert(mediumBlue.diagnostics.usedProtectionPatch === false, "MEDIUM_BLUE_NO_PATCH");
+
   const moved = await runCase(await complexTopRight());
+  assert(moved.diagnostics.selectedLogoVariant === "colorFullLockup", "COMPLEX_TOP_RIGHT_PRESERVE_COLOR");
   assert(moved.diagnostics.logoPlacement?.key !== "topRight", "COMPLEX_TOP_RIGHT_REPOSITIONED");
   assert(moved.diagnostics.usedProtectionPatch === false, "COMPLEX_TOP_RIGHT_NO_PATCH");
 
@@ -46,21 +51,10 @@ async function main(): Promise<void> {
   assert(!symbol.safety.passed && !symbol.output, "SYMBOL_ONLY_REJECTED");
   assert(symbol.safety.checks.some((item) => item.code === "logo_asset_full_lockup" && !item.passed), "SYMBOL_ONLY_CHECK_CODE");
 
-  console.log("FINAL_COMPOSER_LOGO_VARIANT_PASS", {
-    light: light.diagnostics.selectedLogoVariant,
-    dark: dark.diagnostics.selectedLogoVariant,
-    warm: warm.diagnostics.selectedLogoVariant,
-    moved: moved.diagnostics.logoPlacement?.key,
-    patched: patched.diagnostics.usedProtectionPatch,
-    missingWhiteWarnings: colorOnly.warnings.length,
-  });
+  console.log("FINAL_COMPOSER_LOGO_VARIANT_PASS", { light: light.diagnostics.selectedLogoVariant, dark: dark.diagnostics.selectedLogoVariant, warm: warm.diagnostics.selectedLogoVariant, mediumBlue: mediumBlue.diagnostics.selectedLogoVariant, moved: moved.diagnostics.logoPlacement?.key, patched: patched.diagnostics.usedProtectionPatch, missingWhiteWarnings: colorOnly.warnings.length });
 }
 
-async function runCase(
-  background: Buffer,
-  logoStrategyHint?: FinalBrandLayerAsset["logoStrategyHint"],
-  variantKeys?: BrandLogoVariantKey[],
-): Promise<Awaited<ReturnType<typeof composeFinalPoster>>> {
+async function runCase(background: Buffer, logoStrategyHint?: FinalBrandLayerAsset["logoStrategyHint"], variantKeys?: BrandLogoVariantKey[]): Promise<Awaited<ReturnType<typeof composeFinalPoster>>> {
   const logo = await logoAsset(variantKeys, logoStrategyHint);
   const titleLayer = await transparentLayer();
   return composeFinalPoster(input(background, createTitleAsset(titleLayer), logo));
@@ -195,6 +189,5 @@ function sha256(input: Buffer): string {
   return createHash("sha256").update(input).digest("hex");
 }
 main().catch((error: unknown) => {
-  console.error("FINAL_COMPOSER_LOGO_VARIANT_FAILED", error instanceof Error ? error.message : String(error));
-  process.exit(1);
+  console.error("FINAL_COMPOSER_LOGO_VARIANT_FAILED", error instanceof Error ? error.message : String(error)); process.exit(1);
 });

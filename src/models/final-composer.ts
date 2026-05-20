@@ -51,10 +51,12 @@ export type FinalLogoCandidateScore = {
   placementKey: FinalLogoPlacementKey;
   safeScore: number;
   contrastScore: number;
+  brandFidelityScore: number;
   backgroundComplexity: number;
   brightness: number;
   edgeClutter: number;
   overlapsTitle: boolean;
+  readable: boolean;
   reason: string;
 };
 
@@ -63,8 +65,13 @@ export type FinalLogoDecision = {
   logoPlacement?: FinalLogoPlacement;
   logoSafeScore?: number;
   logoContrastScore?: number;
+  logoBrandFidelityScore?: number;
   logoBackgroundComplexity?: number;
   logoDecisionReason?: string;
+  logoVariantReason?: string;
+  colorLogoReadable?: boolean;
+  selectedBecause?: string;
+  rejectedColorReason?: string;
   usedProtectionPatch: boolean;
   protectionPatchReason?: string;
   protectionPatch?: {
