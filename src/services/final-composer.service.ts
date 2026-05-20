@@ -9,8 +9,10 @@ import type {
   FinalComposerLayerManifestItem,
   FinalComposerResult,
   FinalComposerSafetyCheck,
+  FinalLogoDecision,
 } from "@/models/final-composer";
 import type { TitleAsset } from "@/models/title-asset";
+import { prepareFinalLogoLayers } from "@/services/helpers/final-composer-logo-layer";
 
 const DEFAULT_JPEG_QUALITY = 78;
 const EDGE_MARGIN_PX = 60;
@@ -25,6 +27,12 @@ type Placement = {
 
 type PreparedLayer = FinalComposerLayerManifestItem & {
   input: Buffer;
+};
+
+type PreparedLayersResult = {
+  layers: PreparedLayer[];
+  logoDecision?: FinalLogoDecision;
+  warnings: string[];
 };
 
 export async function composeFinalPoster(
@@ -52,7 +60,26 @@ export async function composeFinalPoster(
     };
   }
 
-  const preparedLayers = buildPreparedLayers(input);
+  let prepared: PreparedLayersResult;
+  try {
+    prepared = await buildPreparedLayers(input);
+  } catch (error) {
+    return {
+      source: "final-composer-v1",
+      layerManifest,
+      safety: {
+        passed: false,
+        checks: [
+          ...safety,
+          check("output_compose_succeeded", false, "error", "Sharp composition must complete before Final Composer can return artwork."),
+        ],
+      },
+      diagnostics,
+      warnings: [...buildWarnings(input), errorMessage(error)],
+      reason: "Final Composer failed during logo decision or layer preparation.",
+    };
+  }
+  const preparedLayers = prepared.layers;
   const manifest = preparedLayers.map(({ input: _layerInput, ...item }) => item);
   const outputMimeType = input.compositionPolicy.outputMimeType ?? "image/jpeg";
   const jpegQuality = input.compositionPolicy.jpegQuality ?? DEFAULT_JPEG_QUALITY;
@@ -75,8 +102,9 @@ export async function composeFinalPoster(
         layerOrder: manifest.map((item) => item.kind),
         titleAssetSha256: titleLayer?.sha256,
         backgroundSha256: input.backgroundAsset.sha256,
+        ...logoDiagnostics(prepared.logoDecision),
       },
-      warnings: [...buildWarnings(input), errorMessage(error)],
+      warnings: [...buildWarnings(input), ...prepared.warnings, errorMessage(error)],
       reason: "Final Composer failed during Sharp composition.",
     };
   }
@@ -98,27 +126,32 @@ export async function composeFinalPoster(
       layerOrder: manifest.map((item) => item.kind),
       titleAssetSha256: titleLayer?.sha256,
       backgroundSha256: input.backgroundAsset.sha256,
+      ...logoDiagnostics(prepared.logoDecision),
     },
-    warnings: buildWarnings(input),
+    warnings: [...buildWarnings(input), ...prepared.warnings],
     reason: "Final Composer v1 composed final poster from immutable raster layers.",
   };
 }
 
-function buildPreparedLayers(input: FinalComposerInput): PreparedLayer[] {
+async function buildPreparedLayers(input: FinalComposerInput): Promise<PreparedLayersResult> {
   const layers: PreparedLayer[] = [
     { ...backgroundManifest(input.backgroundAsset), input: input.backgroundAsset.input },
     { ...titleManifest(input.titleAsset), input: input.titleAsset.rasterLayer!.input },
   ];
-  const logo = prepareBrandLayer("logo", input.brandAssets?.logo, input.canvas);
+  const logo = await prepareFinalLogoLayers(input);
   const mascot = prepareBrandLayer("mascot", input.brandAssets?.mascot, input.canvas);
   const campusInfo = prepareCampusInfoLayer(input.campusInfoAsset, input.canvas);
 
-  return [
-    ...layers,
-    ...(logo ? [logo] : []),
-    ...(mascot ? [mascot] : []),
-    ...(campusInfo ? [campusInfo] : []),
-  ];
+  return {
+    layers: [
+      ...layers,
+      ...logo.layers,
+      ...(mascot ? [mascot] : []),
+      ...(campusInfo ? [campusInfo] : []),
+    ],
+    logoDecision: logo.decision,
+    warnings: logo.warnings,
+  };
 }
 
 function backgroundManifest(asset: FinalBackgroundAsset): FinalComposerLayerManifestItem {
@@ -299,6 +332,9 @@ function brandAssetChecks(
   return [
     check(`${label}_asset_buffer_valid`, Buffer.isBuffer(asset.input) && asset.input.byteLength > 0, "error", `${label} asset input must be a non-empty Buffer.`),
     check(`${label}_asset_dimensions_valid`, isPositiveInteger(asset.width) && isPositiveInteger(asset.height), "error", `${label} asset dimensions must be positive integers.`),
+    ...(label === "logo" ? [
+      check("logo_asset_full_lockup", asset.fullLockup !== false, "error", "logo asset must be the full lockup, not symbol-only artwork."),
+    ] : []),
   ];
 }
 
@@ -316,6 +352,23 @@ function buildWarnings(input: FinalComposerInput): string[] {
     ...(input.titleAsset.debugSvg ? ["debugSvg retained for diagnostics but ignored by Final Composer."] : []),
     ...(input.titleAsset.measurementSvg ? ["measurementSvg retained for diagnostics but ignored by Final Composer."] : []),
   ];
+}
+
+function logoDiagnostics(decision: FinalLogoDecision | undefined): Partial<FinalComposerResult["diagnostics"]> {
+  if (!decision) return {};
+  return {
+    selectedLogoVariant: decision.selectedLogoVariant,
+    logoPlacement: decision.logoPlacement,
+    logoSafeScore: decision.logoSafeScore,
+    logoContrastScore: decision.logoContrastScore,
+    logoBackgroundComplexity: decision.logoBackgroundComplexity,
+    logoDecisionReason: decision.logoDecisionReason,
+    usedProtectionPatch: decision.usedProtectionPatch,
+    protectionPatchReason: decision.protectionPatchReason,
+    candidateScores: decision.candidateScores,
+    logoStrategyHint: decision.logoStrategyHint,
+    logoDecision: decision,
+  };
 }
 
 function isValidBackground(asset: FinalBackgroundAsset): boolean {

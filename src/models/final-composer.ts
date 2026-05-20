@@ -1,3 +1,4 @@
+import type { BrandLogoVariantKey } from "@/config/brand";
 import type { TitleAsset } from "@/models/title-asset";
 
 export type FinalComposerSource = "final-composer-v1";
@@ -16,11 +17,77 @@ export type FinalBackgroundAsset = {
   sha256?: string;
 };
 
+export type FinalLogoVariantKey = BrandLogoVariantKey;
+
+export type FinalLogoPlacementKey =
+  | "topRight"
+  | "topLeft"
+  | "bottomRight"
+  | "bottomLeft"
+  | "upperRightSafe"
+  | "upperLeftSafe";
+
+export type FinalLogoProtectionMode = "none" | "minimalProtectionPatch";
+
+export type FinalLogoPlacement = {
+  key: FinalLogoPlacementKey;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
+
+export type FinalLogoVariantAsset = {
+  key: FinalLogoVariantKey;
+  input: Buffer;
+  width: number;
+  height: number;
+  derived?: boolean;
+  fullLockup: true;
+};
+
+export type FinalLogoCandidateScore = {
+  variantKey: FinalLogoVariantKey;
+  placementKey: FinalLogoPlacementKey;
+  safeScore: number;
+  contrastScore: number;
+  backgroundComplexity: number;
+  brightness: number;
+  edgeClutter: number;
+  overlapsTitle: boolean;
+  reason: string;
+};
+
+export type FinalLogoDecision = {
+  selectedLogoVariant?: FinalLogoVariantKey;
+  logoPlacement?: FinalLogoPlacement;
+  logoSafeScore?: number;
+  logoContrastScore?: number;
+  logoBackgroundComplexity?: number;
+  logoDecisionReason?: string;
+  usedProtectionPatch: boolean;
+  protectionPatchReason?: string;
+  protectionPatch?: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    fill: string;
+    opacity: number;
+  };
+  logoStrategyHint?: FinalLogoVariantKey | "repositionPreferred" | "minimalProtectionPatch";
+  candidateScores: FinalLogoCandidateScore[];
+};
+
 export type FinalBrandLayerAsset = {
   input: Buffer;
   width: number;
   height: number;
   placementPolicy: "topRight" | "topLeft" | "optional" | "none";
+  variantKey?: FinalLogoVariantKey;
+  variantAssets?: FinalLogoVariantAsset[];
+  logoStrategyHint?: FinalLogoDecision["logoStrategyHint"];
+  fullLockup?: boolean;
 };
 
 export type FinalCampusInfoAsset = {
@@ -56,6 +123,7 @@ export type FinalComposerInput = {
 export type FinalComposerLayerKind =
   | "background"
   | "titleAsset"
+  | "logoProtectionPatch"
   | "logo"
   | "mascot"
   | "campusInfo";
@@ -100,6 +168,17 @@ export type FinalComposerResult = {
     titleAssetSha256?: string;
     backgroundSha256?: string;
     outputPath?: string;
+    selectedLogoVariant?: FinalLogoVariantKey;
+    logoPlacement?: FinalLogoPlacement;
+    logoSafeScore?: number;
+    logoContrastScore?: number;
+    logoBackgroundComplexity?: number;
+    logoDecisionReason?: string;
+    usedProtectionPatch?: boolean;
+    protectionPatchReason?: string;
+    candidateScores?: FinalLogoCandidateScore[];
+    logoStrategyHint?: FinalLogoDecision["logoStrategyHint"];
+    logoDecision?: FinalLogoDecision;
   };
   warnings: string[];
   reason: string;
