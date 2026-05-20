@@ -13,12 +13,13 @@ import {
   unitBoxes,
   validateRefinedBlueprint,
 } from "@/services/helpers/title-candidate-refiner-geometry";
+import { enforceMinimumLockupScale } from "@/services/helpers/title-candidate-refiner-scale";
 import type { TitleCandidateScoringResult } from "@/services/title-candidate-scorer.service";
 import type { SpatialStrategy } from "@/services/spatial-strategy-planner.service";
 
 export type RefineTitleCandidatesInput = { lockupBlueprints: TitleLockupBlueprint[]; spatialStrategy: SpatialStrategy; scorerResults: TitleCandidateScoringResult[]; options?: { maxVariantsPerCandidate?: 1 | 2; minSubtitleHeightPx?: number; minUnitGapPx?: number } };
 
-export type TitleRefinementActionType = "preserveAsIs" | "expandLockupBox" | "rebalanceUnitBoxes" | "increaseHeroUnitHeight" | "normalizeThreeStepSpacing" | "restoreSubtitleBelowLockup" | "shiftSubtitleToSecondaryAnchor" | "hideUnsafeSubtitle" | "rejectUnsafeRefinement";
+export type TitleRefinementActionType = "preserveAsIs" | "enforceMinimumLockupScale" | "expandLockupBox" | "rebalanceUnitBoxes" | "increaseHeroUnitHeight" | "normalizeThreeStepSpacing" | "restoreSubtitleBelowLockup" | "shiftSubtitleToSecondaryAnchor" | "hideUnsafeSubtitle" | "rejectUnsafeRefinement";
 
 export type TitleRefinementActionRecord = { type: TitleRefinementActionType; sourceCandidateId: string; refinedCandidateId?: string; target: string; before?: unknown; after?: unknown; reason: string; safetyImpact: "neutral" | "improves_safety" | "requires_validation" | "rejects_unsafe" };
 
@@ -62,6 +63,7 @@ export function refineTitleCandidates(input: RefineTitleCandidatesInput): Refine
     }
 
     const blueprint = cloneBlueprint(source);
+    applyMinimumScale(blueprint, input.spatialStrategy, actions, refinedCandidateId);
     maybeExpandLockupBox(blueprint, input.spatialStrategy, actions, refinedCandidateId);
     rebalanceUnits(blueprint, minGap, actions, refinedCandidateId);
     refineSubtitle(blueprint, input.spatialStrategy, minGap, minSubtitleHeight, actions, refinedCandidateId);
@@ -119,6 +121,14 @@ export function refineTitleCandidates(input: RefineTitleCandidatesInput): Refine
     warnings,
     reason: `Refined ${refinedBlueprints.length} of ${selected.length} scorer-selected candidates; rejected ${rejectedRefinementCandidates.length}.`,
   };
+}
+
+function applyMinimumScale(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, actions: TitleRefinementActionRecord[], refinedCandidateId: string): void {
+  const before = box(blueprint.lockupBox);
+  const diagnostics = enforceMinimumLockupScale(blueprint, strategy);
+  if (diagnostics.scaleApplied || diagnostics.scaleBlockedReason) {
+    actions.push(action("enforceMinimumLockupScale", blueprint.candidateId, refinedCandidateId, "lockupBox", before, { lockupBox: box(blueprint.lockupBox), diagnostics }, diagnostics.titleScaleRecommendation, "requires_validation"));
+  }
 }
 
 function maybeExpandLockupBox(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, actions: TitleRefinementActionRecord[], refinedCandidateId: string): void {

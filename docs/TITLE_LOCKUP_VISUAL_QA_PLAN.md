@@ -41,6 +41,16 @@ Each sample reports:
 - dominance score `< 60`: `dominanceWeak` WARN
 - dominance score `< 45`: `dominanceWeak` FAIL
 
+## L6 Refiner Minimum Scale Evidence
+
+Real generated poster QA showed 6/6 lockups below `0.06`:
+
+- observed title/lockup ratio range: `0.0029` to `0.0495`
+- first remediation layer: refiner minimum lockup scale
+- v1 target: `targetLockupAreaRatio = 0.08`
+- v1 minimum acceptable: `minAcceptableLockupAreaRatio = 0.06`
+- Final Composer is not the first suspect because it preserves the measured title asset bounds.
+
 ## Review Rule
 
 Do not improve title visuals until this harness identifies the layer likely responsible:

@@ -44,6 +44,9 @@ export type TitleVisualQualityDiagnostics = {
   titlePlacementRegion: string;
   titleToCanvasWidthRatio: number;
   titleToCanvasHeightRatio: number;
+  targetLockupAreaRatio: number;
+  minAcceptableLockupAreaRatio: number;
+  minimumScalePassed: boolean;
   estimatedTitleDominanceScore: number;
   estimatedHierarchyScore: number;
   estimatedSubtitleSupportScore: number;
@@ -63,6 +66,7 @@ export type TitleVisualQualityCompactRow = {
   titleAssetVisibleAreaRatio: number;
   lockupBoxAreaRatio: number;
   subtitleVisible: boolean;
+  minimumScalePassed: boolean;
   estimatedTitleDominanceScore: number;
   warnings: string[];
   recommendation: string;

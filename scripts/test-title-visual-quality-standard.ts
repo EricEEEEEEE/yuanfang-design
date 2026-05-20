@@ -144,8 +144,8 @@ function printRows(rows: ReturnType<typeof toTitleVisualQualityRow>[]): void {
 }
 
 function reviewMarkdown(rows: ReturnType<typeof toTitleVisualQualityRow>[]): string {
-  const lines = ["# Title Visual Quality QA v1", "", "Thresholds are provisional WARN/FAIL diagnostics, not production gates.", "", "| sample | candidate | title ratio | lockup ratio | subtitle | dominance | warnings | recommendation |", "|---|---:|---:|---:|---|---:|---|---|"];
-  for (const row of rows) lines.push(`| ${row.sampleId} | ${row.selectedCandidateId} | ${row.titleAssetVisibleAreaRatio} | ${row.lockupBoxAreaRatio} | ${row.subtitleVisible ? "YES" : "NO"} | ${row.estimatedTitleDominanceScore} | ${row.warnings.join(",") || "none"} | ${row.recommendation} |`);
+  const lines = ["# Title Visual Quality QA v1", "", "Thresholds are provisional WARN/FAIL diagnostics, not production gates.", "", "| sample | candidate | title ratio | lockup ratio | min scale | subtitle | dominance | warnings | recommendation |", "|---|---:|---:|---:|---|---|---:|---|---|"];
+  for (const row of rows) lines.push(`| ${row.sampleId} | ${row.selectedCandidateId} | ${row.titleAssetVisibleAreaRatio} | ${row.lockupBoxAreaRatio} | ${row.minimumScalePassed ? "PASS" : "FAIL"} | ${row.subtitleVisible ? "YES" : "NO"} | ${row.estimatedTitleDominanceScore} | ${row.warnings.join(",") || "none"} | ${row.recommendation} |`);
   return `${lines.join("\n")}\n`;
 }
 

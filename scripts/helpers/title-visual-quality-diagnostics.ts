@@ -12,6 +12,8 @@ export type BuildTitleVisualQualityInput = {
   result: StandardGenerationResult;
   backgroundLuminance?: number;
 };
+const TARGET_LOCKUP_AREA_RATIO = 0.08;
+const MIN_ACCEPTABLE_LOCKUP_AREA_RATIO = 0.06;
 export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualityInput): TitleVisualQualityDiagnostics {
   const { result } = input;
   const asset = result.titleAssetResult?.titleAsset;
@@ -79,6 +81,9 @@ export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualit
     titlePlacementRegion: placement(titleCenter),
     titleToCanvasWidthRatio,
     titleToCanvasHeightRatio,
+    targetLockupAreaRatio: TARGET_LOCKUP_AREA_RATIO,
+    minAcceptableLockupAreaRatio: MIN_ACCEPTABLE_LOCKUP_AREA_RATIO,
+    minimumScalePassed: lockupBoxAreaRatio >= MIN_ACCEPTABLE_LOCKUP_AREA_RATIO,
     estimatedTitleDominanceScore: dominance,
     estimatedHierarchyScore: hierarchy,
     estimatedSubtitleSupportScore: subtitleSupport,
@@ -98,6 +103,7 @@ export function toTitleVisualQualityRow(item: TitleVisualQualityDiagnostics): Ti
     titleAssetVisibleAreaRatio: item.titleAssetVisibleAreaRatio,
     lockupBoxAreaRatio: item.lockupBoxAreaRatio,
     subtitleVisible: item.subtitleVisible,
+    minimumScalePassed: item.minimumScalePassed,
     estimatedTitleDominanceScore: item.estimatedTitleDominanceScore,
     warnings: item.warnings,
     recommendation: item.recommendation,
