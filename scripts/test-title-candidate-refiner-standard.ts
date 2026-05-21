@@ -114,7 +114,7 @@ function runDeterministicScaleTests(): void {
 
   const blocked = refineFixture("scaleBlocked", [{ id: "blockedFutureScale", reasonType: "subject", reason: "fixture", x: 260, y: 80, width: 400, height: 400 }], { x: 100, y: 100, width: 130, height: 150 });
   const blockedAction = scaleAction(blocked);
-  assert("REFINER_MIN_SCALE_BLOCKED_BY_SAFETY_PASS", areaRatio(blocked.refinedBlueprints[0].blueprint.lockupBox) < 0.06 && blockedAction?.scaleBlockedReason === "minimumLockupScaleBlockedBySafety" && blocked.refinedBlueprints[0].safety.passed);
+  assert("REFINER_MIN_SCALE_BLOCKED_BY_SAFETY_PASS", blocked.refinedBlueprints.length === 0 && blocked.rejectedRefinementCandidates[0]?.reason.includes("final_below_minimum_lockup_scale") && blockedAction?.scaleBlockedReason === "blocked_by_forbidden_zone");
 
   const subtitle = refineFixture("subtitlePreserved", [], { x: 230, y: 140, width: 180, height: 170 });
   const refined = subtitle.refinedBlueprints[0].blueprint;

@@ -47,8 +47,14 @@ Real generated poster QA showed 6/6 lockups below `0.06`:
 
 - observed title/lockup ratio range: `0.0029` to `0.0495`
 - first remediation layer: refiner minimum lockup scale
-- v1 target: `targetLockupAreaRatio = 0.08`
+- render-sizing target: `targetLockupAreaRatio = 0.16`, based on measured glyph occupancy around `0.4-0.5`
 - v1 minimum acceptable: `minAcceptableLockupAreaRatio = 0.06`
+- v2 treats below-minimum refined/original candidates as final-pool ineligible instead of silently acceptable.
+- measured gate treats below-minimum raster title bboxes as TitleAsset handoff failures; diagnostics also report blueprint ratio, unit fill ratio, measured ratio, and transparent padding.
+- measured retry now records each attempted candidate, measured ratio, pass/fail reason, and whether a retry-only refined candidate was selected.
+- non-rejected keep candidates may produce retry-only refined variants; they enter the final pool but not the primary recommended list.
+- style v1 target is `yuanfangTitleAssetV1`: restrained white-fill / Yuanfang-blue outline / soft lift shadow for main title, with smaller subtitle support. It is a contrast and hierarchy baseline, not final poster typography polish.
+- Style v1 is measured-safe: the handoff compares styled and `unstyledBaseline` render variants per candidate, prefers styled only when it passes measured scale/safety, and records fallback diagnostics if baseline must be used.
 - Final Composer is not the first suspect because it preserves the measured title asset bounds.
 
 ## Review Rule

@@ -5,13 +5,14 @@ import type {
   TitleAssetHandoffResult,
   TitleRasterLayer,
 } from "@/models/title-asset";
-import { measureTitleRaster } from "@/services/title-raster-measurement.service";
+import type { RasterMeasurementResult } from "@/models/title-raster-measurement";
 import { renderTitleVectorGlyph } from "@/services/title-vector-glyph-renderer.service";
 import type {
   VectorGlyphRenderInput,
   VectorGlyphRenderResult,
   VectorGlyphWarning,
 } from "@/models/title-vector-glyph-renderer";
+import { renderTitleAssetDebugSvg, selectMeasuredTitleAssetRenderVariant } from "@/services/helpers/title-asset-render-variant";
 
 export type RenderMeasuredTitleAssetInput = Pick<
   VectorGlyphRenderInput,
@@ -32,29 +33,13 @@ export type RenderMeasuredTitleAssetInput = Pick<
 export async function renderMeasuredTitleAsset(
   input: RenderMeasuredTitleAssetInput,
 ): Promise<TitleAssetHandoffResult> {
-  const measurementInput = createMeasurementRenderInput(input);
-  const measurementResult = renderTitleVectorGlyph(measurementInput);
-  if (!measurementResult.svg) {
-    return fail(input, "measurementSvg render did not return SVG.", measurementResult.warnings, undefined, {
-      measurementOutputTarget: measurementResult.outputTarget,
-    });
-  }
-
-  const rasterMeasurement = await measureTitleRaster({
-    candidateId: input.blueprint.candidateId,
-    measurementSvg: measurementResult.svg,
-    canvas: input.canvas,
-    glyphRuns: measurementResult.glyphRuns,
-    estimatedMeasuredBoxes: measurementResult.measuredBoxes,
-    forbiddenZones: input.safetyContext?.forbiddenZones,
-    mode: "hybrid",
-    outputTarget: measurementResult.outputTarget,
-    fontEmbedMode: measurementResult.fontEmbedMode,
-  });
-  const rasterWarnings = [...measurementResult.warnings, ...rasterMeasurement.warnings];
-  if (!rasterMeasurement.safety.passed) {
-    return fail(input, "Sharp raster measurement did not pass.", rasterWarnings, undefined, diagnostics(measurementResult, undefined, rasterMeasurement));
-  }
+  const selection = await selectMeasuredTitleAssetRenderVariant(input);
+  const attempt = selection.attempt;
+  if (!attempt.measurementResult.svg) return fail(input, "measurementSvg render did not return SVG.", attempt.measurementResult.warnings, undefined, { measurementOutputTarget: attempt.measurementResult.outputTarget });
+  if (!attempt.rasterMeasurement.safety.passed) return fail(input, "Sharp raster measurement did not pass.", attempt.rasterWarnings, undefined, diagnostics(attempt.measurementResult, undefined, attempt.rasterMeasurement));
+  const { measurementInput, measurementResult, rasterMeasurement, rasterWarnings, visualScale } = attempt;
+  const titleVisualScale = { ...visualScale.metrics, ...selection.titleVisualScaleDiagnostics };
+  if (!visualScale.passed) return fail(input, visualScale.reason, rasterWarnings, undefined, { ...diagnostics(measurementResult, undefined, rasterMeasurement), titleVisualScale });
 
   const productionResult = renderTitleVectorGlyph({
     ...measurementInput,
@@ -69,8 +54,8 @@ export async function renderMeasuredTitleAsset(
     return fail(input, "production rasterLayer gate did not pass.", warnings, productionResult, diagnostics(measurementResult, productionResult, rasterMeasurement));
   }
 
-  const rasterLayer = await rasterizeTitleLayer(measurementResult.svg);
-  const debugSvg = input.includeDebugSvg ? renderDebugSvg(input) : undefined;
+  const rasterLayer = await rasterizeTitleLayer(measurementResult.svg!);
+  const debugSvg = input.includeDebugSvg ? renderTitleAssetDebugSvg(input, measurementInput.titleStylePreset) : undefined;
   const titleAsset: TitleAsset = {
     assetId: assetId(input.blueprint.candidateId, rasterLayer.sha256),
     candidateId: input.blueprint.candidateId,
@@ -87,7 +72,7 @@ export async function renderMeasuredTitleAsset(
     glyphRuns: productionResult.glyphRuns,
     rasterMeasurementResult: rasterMeasurement,
     safety: productionResult.safety,
-    diagnostics: diagnostics(measurementResult, productionResult, rasterMeasurement, rasterLayer, debugSvg),
+    diagnostics: { ...diagnostics(measurementResult, productionResult, rasterMeasurement, rasterLayer, debugSvg), titleVisualScale },
     warnings,
     createdAt: input.createdAt,
     reason: "Title asset handoff produced a production-gated transparent PNG title raster layer.",
@@ -104,24 +89,6 @@ export async function renderMeasuredTitleAsset(
   };
 }
 
-function createMeasurementRenderInput(input: RenderMeasuredTitleAssetInput): VectorGlyphRenderInput {
-  return {
-    source: input.source,
-    blueprint: input.blueprint,
-    canvas: input.canvas,
-    titleStylePreset: input.titleStylePreset,
-    brandStyle: input.brandStyle,
-    fontRegistry: input.fontRegistry,
-    fontFallback: input.fontFallback,
-    safetyContext: input.safetyContext,
-    renderMode: "debug",
-    outputFormat: "svg",
-    outputTarget: "measurementSvg",
-    fontEmbedMode: "none",
-    measurementRequirement: "estimatedOnly",
-  };
-}
-
 async function rasterizeTitleLayer(svg: string): Promise<TitleRasterLayer> {
   const { data, info } = await sharp(Buffer.from(svg)).ensureAlpha().png().toBuffer({ resolveWithObject: true });
   return {
@@ -134,15 +101,6 @@ async function rasterizeTitleLayer(svg: string): Promise<TitleRasterLayer> {
     sha256: sha256(data),
     byteLength: data.byteLength,
   };
-}
-
-function renderDebugSvg(input: RenderMeasuredTitleAssetInput): string | undefined {
-  return renderTitleVectorGlyph({
-    ...createMeasurementRenderInput(input),
-    renderMode: "debug",
-    outputTarget: "debugSvg",
-    fontEmbedMode: "full",
-  }).svg;
 }
 
 function fail(
@@ -165,7 +123,7 @@ function fail(
 function diagnostics(
   measurementResult: VectorGlyphRenderResult,
   productionResult?: VectorGlyphRenderResult,
-  rasterMeasurement?: Awaited<ReturnType<typeof measureTitleRaster>>,
+  rasterMeasurement?: RasterMeasurementResult,
   rasterLayer?: TitleRasterLayer,
   debugSvg?: string,
 ): Record<string, unknown> {

@@ -55,6 +55,17 @@ export type RasterGlyphRunMeasurement = {
   scanBox: TitleBox;
   scanExpansionPx: number;
   estimatedBox?: TitleBox;
+  fill?: string;
+  strokeWidth?: number;
+  strokeColor?: string;
+  titleStylePreset?: string;
+  contrastTreatmentApplied?: boolean;
+  hierarchyTreatmentApplied?: boolean;
+  styleSafetyWarnings?: string[];
+  visualWeight?: number;
+  renderScaleX?: number;
+  targetTextLength?: number;
+  renderScaleAdjustmentApplied?: boolean;
   inkBox: RasterInkBox | null;
   measuredBox?: TitleBox;
   insidePlannedBox: boolean;

@@ -14,6 +14,7 @@ import {
   type RefineTitleCandidatesResult,
   type RefinedTitleLockupBlueprint,
 } from "@/services/title-candidate-refiner.service";
+import { withMinimumLockupScaleSafety } from "@/services/helpers/title-candidate-refiner-scale";
 
 export type GenerateScoredRefinedTitleCandidatesInput = GenerateTitleCandidatesInput;
 export type TitleCandidatePipelineSource = "rule-based-v1";
@@ -90,15 +91,16 @@ function buildFinalCandidatePool(
     blueprint.candidateId = item.refinedCandidateId;
     refinedCandidateIdMap[item.sourceCandidateId] = item.refinedCandidateId;
     sourceCandidateIdMap[item.refinedCandidateId] = item.sourceCandidateId;
-    const safety = validatePoolCandidate(blueprint, rejectedIds, item.sourceCandidateId);
-    addPoolCandidate({ blueprint, safety, sourceCandidateId: item.sourceCandidateId, origin: "refined", recommendedAction: "refine", reason: `refined from ${item.sourceCandidateId}.` }, finalCandidatePool, recommendedCandidateIds, finalPoolItems, safetyFlags, warnings);
+    const safety = withMinimumLockupScaleSafety(blueprint, validatePoolCandidate(blueprint, rejectedIds, item.sourceCandidateId));
+    const recommendedAction = score.recommendedAction === "refine" ? "refine" : "keep";
+    addPoolCandidate({ blueprint, safety, sourceCandidateId: item.sourceCandidateId, origin: "refined", recommendedAction, reason: `${recommendedAction === "refine" ? "refined" : "measured retry refinement"} from ${item.sourceCandidateId}.` }, finalCandidatePool, recommendedCandidateIds, finalPoolItems, safetyFlags, warnings);
   }
 
   for (const score of scoringResult.results.filter((result) => result.recommendedAction === "keep" && !result.shouldReject).sort((left, right) => left.finalRank - right.finalRank)) {
     const source = sourceById.get(score.candidateId);
     if (!source || source.isFallbackCandidate) continue;
     const blueprint = cloneBlueprint(source);
-    const safety = validatePoolCandidate(blueprint, rejectedIds);
+    const safety = withMinimumLockupScaleSafety(blueprint, validatePoolCandidate(blueprint, rejectedIds));
     addPoolCandidate({ blueprint, safety, origin: "original_keep", recommendedAction: "keep", reason: score.keepButDoNotRefineReason ?? "candidate kept without refinement." }, finalCandidatePool, recommendedCandidateIds, finalPoolItems, safetyFlags, warnings);
   }
 

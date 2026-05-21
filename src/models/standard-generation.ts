@@ -88,6 +88,32 @@ export type StandardGenerationCandidateLineage = {
   productionEligible: boolean;
 };
 
+export type StandardGenerationMeasuredCandidateAttempt = {
+  attemptedCandidateId: string;
+  baseCandidateId?: string;
+  retryEligible: boolean;
+  measuredTitleAssetRatio?: number;
+  measuredFinalTitleRatio?: number;
+  glyphOccupancyInsideUnitBox?: number;
+  glyphOccupancyInsideLockup?: number;
+  renderScaleAdjustmentApplied?: boolean;
+  renderSizingBlockedReason?: string;
+  titleStylePreset?: string;
+  contrastTreatmentApplied?: boolean;
+  hierarchyTreatmentApplied?: boolean;
+  titleStyleAttempted?: boolean;
+  titleStyleApplied?: boolean;
+  titleStyleFallbackUsed?: boolean;
+  titleStyleFallbackReason?: string;
+  styledMeasuredTitleAssetRatio?: number;
+  baselineMeasuredTitleAssetRatio?: number;
+  styleMeasuredDelta?: number;
+  selectedRenderVariant?: "styled" | "baseline" | "none";
+  measuredPass: boolean;
+  failReason?: string;
+  selectedByMeasuredRetry?: boolean;
+};
+
 export type StandardGenerationResult = {
   source: StandardGenerationSource | "diagnostic-only";
   output?: FinalComposerResult["output"];
@@ -104,6 +130,10 @@ export type StandardGenerationResult = {
     finalCandidatePoolIds: string[];
     recommendedCandidateIds: string[];
     attemptedCandidateIds: string[];
+    measuredCandidateAttempts?: StandardGenerationMeasuredCandidateAttempt[];
+    selectedByMeasuredRetry?: boolean;
+    retryCount?: number;
+    noMeasuredSafeTitleCandidate?: boolean;
     selectedTitleCandidateId?: string;
     titleAssetId?: string;
     finalOutputSha256?: string;

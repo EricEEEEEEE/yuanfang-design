@@ -1,18 +1,9 @@
 import type { TitleBox } from "../../src/config/title-lockup-blueprint";
 import type { StandardGenerationResult } from "../../src/models/standard-generation";
-import type {
-  TitleVisualQualityCompactRow,
-  TitleVisualQualityDiagnostics,
-  TitleVisualQualityMetricSources,
-} from "../../src/models/title-visual-quality-diagnostics";
+import type { TitleVisualQualityCompactRow, TitleVisualQualityDiagnostics, TitleVisualQualityMetricSources } from "../../src/models/title-visual-quality-diagnostics";
 
-export type BuildTitleVisualQualityInput = {
-  sampleId: string;
-  sampleName: string;
-  result: StandardGenerationResult;
-  backgroundLuminance?: number;
-};
-const TARGET_LOCKUP_AREA_RATIO = 0.08;
+export type BuildTitleVisualQualityInput = { sampleId: string; sampleName: string; result: StandardGenerationResult; backgroundLuminance?: number };
+const TARGET_LOCKUP_AREA_RATIO = 0.16;
 const MIN_ACCEPTABLE_LOCKUP_AREA_RATIO = 0.06;
 export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualityInput): TitleVisualQualityDiagnostics {
   const { result } = input;
@@ -35,12 +26,45 @@ export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualit
   const subtitleAreaRatio = areaRatio(subtitleVisibleBox, canvasBox);
   const titleAssetVisibleAreaRatio = areaRatio(titleAssetVisibleBox, canvasBox);
   const lockupBoxAreaRatio = areaRatio(lockupBox, canvasBox);
+  const blueprintLockupBox = roundBox(scaleMaybe(blueprint?.lockupBox, result));
+  const unitBoxes = blueprint?.titleUnits.map((unit) => scaleMaybe(unit.unitBox, result)).filter((box): box is TitleBox => Boolean(box)) ?? [];
+  const blueprintLockupRatio = areaRatio(blueprintLockupBox, canvasBox);
+  const unitBoxAggregateRatio = areaRatioSum(unitBoxes, canvasBox);
+  const unitBoxFillRatioInsideLockup = round(unitBoxAggregateRatio / Math.max(blueprintLockupRatio, 0.0001));
+  const scaleMetrics = asset?.diagnostics.titleVisualScale as Partial<{ plannedUnitBoxAreaRatio: number; measuredGlyphBoxAreaRatio: number; glyphOccupancyInsideUnitBox: number; glyphOccupancyInsideLockup: number; renderScaleAdjustmentApplied: boolean; renderSizingBlockedReason: string; titleStylePreset: string; contrastTreatmentApplied: boolean; hierarchyTreatmentApplied: boolean; mainTitleVisualWeight: number; subtitleVisualWeight: number; styleSafetyWarnings: string[]; titleStyleAttempted: boolean; titleStyleApplied: boolean; titleStyleFallbackUsed: boolean; titleStyleFallbackReason: string; styledMeasuredTitleAssetRatio: number; baselineMeasuredTitleAssetRatio: number; styleMeasuredDelta: number; selectedRenderVariant: "styled" | "baseline" | "none" }> | undefined;
+  const plannedUnitBoxAreaRatio = scaleMetrics?.plannedUnitBoxAreaRatio ?? unitBoxAggregateRatio;
+  const measuredGlyphBoxAreaRatio = scaleMetrics?.measuredGlyphBoxAreaRatio ?? areaRatioSum(asset?.rasterMeasurementResult?.runMeasurements.map((run) => run.measuredBox).filter((box): box is TitleBox => Boolean(box)) ?? [], canvasBox);
+  const glyphOccupancyInsideUnitBox = scaleMetrics?.glyphOccupancyInsideUnitBox ?? round(measuredGlyphBoxAreaRatio / Math.max(plannedUnitBoxAreaRatio, 0.0001));
+  const glyphOccupancyInsideLockup = scaleMetrics?.glyphOccupancyInsideLockup ?? round(titleAssetVisibleAreaRatio / Math.max(blueprintLockupRatio, 0.0001));
+  const renderScaleAdjustmentApplied = Boolean(scaleMetrics?.renderScaleAdjustmentApplied ?? asset?.rasterMeasurementResult?.runMeasurements.some((run) => run.renderScaleAdjustmentApplied));
+  const renderSizingBlockedReason = scaleMetrics?.renderSizingBlockedReason;
+  const measuredTitleAssetRatio = titleAssetVisibleAreaRatio;
+  const measuredFinalTitleRatio = lockupBoxAreaRatio;
+  const group = asset?.rasterMeasurementResult?.groupInkBox;
+  const transparentPaddingRatio = round(group ? 1 - group.alphaPixelCount / Math.max(1, group.width * group.height) : 0);
+  const selectedScaledBlueprintUsed = Boolean(asset && asset.candidateId === selectedCandidateId && asset.canvas.width === canvas.width && asset.canvas.height === canvas.height);
+  const measuredBelowMinimumReason = measuredTitleAssetRatio < MIN_ACCEPTABLE_LOCKUP_AREA_RATIO ? `measured_title_bbox_below_minimum:${measuredTitleAssetRatio}<${MIN_ACCEPTABLE_LOCKUP_AREA_RATIO}` : undefined;
+  const titleStylePreset = scaleMetrics?.titleStylePreset ?? "unknown";
+  const contrastTreatmentApplied = Boolean(scaleMetrics?.contrastTreatmentApplied);
+  const hierarchyTreatmentApplied = Boolean(scaleMetrics?.hierarchyTreatmentApplied);
+  const mainTitleVisualWeight = scaleMetrics?.mainTitleVisualWeight ?? 0;
+  const subtitleVisualWeight = scaleMetrics?.subtitleVisualWeight ?? 0;
+  const styleSafetyWarnings = scaleMetrics?.styleSafetyWarnings ?? [];
+  const titleStyleAttempted = scaleMetrics?.titleStyleAttempted;
+  const titleStyleApplied = scaleMetrics?.titleStyleApplied;
+  const titleStyleFallbackUsed = scaleMetrics?.titleStyleFallbackUsed;
+  const titleStyleFallbackReason = scaleMetrics?.titleStyleFallbackReason;
+  const styledMeasuredTitleAssetRatio = scaleMetrics?.styledMeasuredTitleAssetRatio;
+  const baselineMeasuredTitleAssetRatio = scaleMetrics?.baselineMeasuredTitleAssetRatio;
+  const styleMeasuredDelta = scaleMetrics?.styleMeasuredDelta;
+  const selectedRenderVariant = scaleMetrics?.selectedRenderVariant;
   const subtitleExpected = Boolean(blueprint?.subtitleLockup.text || subtitleVisibleBox);
   const subtitleVisible = Boolean(subtitleVisibleBox && subtitleAreaRatio > 0.0005);
   const titleCenter = titleAssetVisibleBox ? center(titleAssetVisibleBox, canvasBox) : undefined;
   const titleToCanvasWidthRatio = ratio(titleAssetVisibleBox?.width, canvas.width);
   const titleToCanvasHeightRatio = ratio(titleAssetVisibleBox?.height, canvas.height);
-  const contrast = estimateContrast(asset?.glyphRuns.map((run) => run.fill), input.backgroundLuminance);
+  const rawContrast = estimateContrast(asset?.glyphRuns.map((run) => run.fill), input.backgroundLuminance);
+  const contrast = contrastTreatmentApplied ? Math.max(rawContrast, 72) : rawContrast;
   const forbiddenZones = scaleForbiddenZones(result);
   const overlapForbidden = Boolean(titleAssetVisibleBox && forbiddenZones.some((zone) => overlapRatio(titleAssetVisibleBox, zone) > 0.02));
   const dominance = scoreDominance(titleAssetVisibleAreaRatio, titleToCanvasWidthRatio, titleToCanvasHeightRatio);
@@ -57,57 +81,25 @@ export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualit
     contrast: input.backgroundLuminance === undefined ? "proxy" : "estimated",
     backgroundIntegration: "estimated",
   };
-
   return {
-    source: "title-visual-quality-diagnostics-v1",
-    sampleId: input.sampleId,
-    sampleName: input.sampleName,
-    selectedCandidateId,
+    source: "title-visual-quality-diagnostics-v1", sampleId: input.sampleId, sampleName: input.sampleName, selectedCandidateId,
     sourceCandidateId: result.selectedSourceCandidateId ?? result.diagnostics.selectedLineage?.sourceCandidateId,
-    mainTitle: blueprint?.mainTitle ?? "",
-    subtitle: blueprint?.subtitleLockup.text || undefined,
-    canvasWidth: canvas.width,
-    canvasHeight: canvas.height,
-    lockupBox,
-    lockupBoxAreaRatio,
-    titleAssetVisibleBox,
-    titleAssetVisibleAreaRatio,
-    mainTitleVisibleBox,
-    mainTitleAreaRatio,
-    subtitleVisibleBox,
-    subtitleAreaRatio,
-    subtitleVisible,
-    titleCenter,
-    titlePlacementRegion: placement(titleCenter),
-    titleToCanvasWidthRatio,
-    titleToCanvasHeightRatio,
-    targetLockupAreaRatio: TARGET_LOCKUP_AREA_RATIO,
-    minAcceptableLockupAreaRatio: MIN_ACCEPTABLE_LOCKUP_AREA_RATIO,
-    minimumScalePassed: lockupBoxAreaRatio >= MIN_ACCEPTABLE_LOCKUP_AREA_RATIO,
-    estimatedTitleDominanceScore: dominance,
-    estimatedHierarchyScore: hierarchy,
-    estimatedSubtitleSupportScore: subtitleSupport,
-    estimatedReadabilityScore: readability,
-    estimatedContrastScore: contrast,
-    estimatedBackgroundIntegrationScore: backgroundIntegration,
-    metricSources,
+    mainTitle: blueprint?.mainTitle ?? "", subtitle: blueprint?.subtitleLockup.text || undefined, canvasWidth: canvas.width, canvasHeight: canvas.height,
+    lockupBox, lockupBoxAreaRatio, titleAssetVisibleBox, titleAssetVisibleAreaRatio, mainTitleVisibleBox, mainTitleAreaRatio, subtitleVisibleBox, subtitleAreaRatio, subtitleVisible,
+    titleCenter, titlePlacementRegion: placement(titleCenter), titleToCanvasWidthRatio, titleToCanvasHeightRatio,
+    targetLockupAreaRatio: TARGET_LOCKUP_AREA_RATIO, minAcceptableLockupAreaRatio: MIN_ACCEPTABLE_LOCKUP_AREA_RATIO, minimumScalePassed: lockupBoxAreaRatio >= MIN_ACCEPTABLE_LOCKUP_AREA_RATIO,
+    blueprintLockupRatio, unitBoxAggregateRatio, unitBoxFillRatioInsideLockup, measuredTitleAssetRatio, measuredFinalTitleRatio, plannedUnitBoxAreaRatio, measuredGlyphBoxAreaRatio, glyphOccupancyInsideUnitBox, glyphOccupancyInsideLockup, renderScaleAdjustmentApplied, ...(renderSizingBlockedReason ? { renderSizingBlockedReason } : {}), transparentPaddingRatio, selectedScaledBlueprintUsed,
+    titleStylePreset, contrastTreatmentApplied, hierarchyTreatmentApplied, mainTitleVisualWeight, subtitleVisualWeight, styleSafetyWarnings,
+    ...(titleStyleAttempted !== undefined ? { titleStyleAttempted } : {}), ...(titleStyleApplied !== undefined ? { titleStyleApplied } : {}), ...(titleStyleFallbackUsed !== undefined ? { titleStyleFallbackUsed } : {}), ...(titleStyleFallbackReason ? { titleStyleFallbackReason } : {}), ...(styledMeasuredTitleAssetRatio !== undefined ? { styledMeasuredTitleAssetRatio } : {}), ...(baselineMeasuredTitleAssetRatio !== undefined ? { baselineMeasuredTitleAssetRatio } : {}), ...(styleMeasuredDelta !== undefined ? { styleMeasuredDelta } : {}), ...(selectedRenderVariant ? { selectedRenderVariant } : {}),
+    ...(measuredBelowMinimumReason ? { measuredBelowMinimumReason } : {}),
+    estimatedTitleDominanceScore: dominance, estimatedHierarchyScore: hierarchy, estimatedSubtitleSupportScore: subtitleSupport, estimatedReadabilityScore: readability, estimatedContrastScore: contrast, estimatedBackgroundIntegrationScore: backgroundIntegration, metricSources,
     overlayMetadata: { canvasBox, lockupBox, titleAssetVisibleBox, mainTitleVisibleBox, subtitleBox: subtitleVisibleBox, logoBox: logoBox(result), forbiddenZones },
     warnings, failReasons,
     recommendation: recommendation(warnings, failReasons),
   };
 }
 export function toTitleVisualQualityRow(item: TitleVisualQualityDiagnostics): TitleVisualQualityCompactRow {
-  return {
-    sampleId: item.sampleId,
-    selectedCandidateId: item.selectedCandidateId,
-    titleAssetVisibleAreaRatio: item.titleAssetVisibleAreaRatio,
-    lockupBoxAreaRatio: item.lockupBoxAreaRatio,
-    subtitleVisible: item.subtitleVisible,
-    minimumScalePassed: item.minimumScalePassed,
-    estimatedTitleDominanceScore: item.estimatedTitleDominanceScore,
-    warnings: item.warnings,
-    recommendation: item.recommendation,
-  };
+  return { sampleId: item.sampleId, selectedCandidateId: item.selectedCandidateId, titleAssetVisibleAreaRatio: item.titleAssetVisibleAreaRatio, lockupBoxAreaRatio: item.lockupBoxAreaRatio, subtitleVisible: item.subtitleVisible, minimumScalePassed: item.minimumScalePassed, blueprintLockupRatio: item.blueprintLockupRatio, unitBoxFillRatioInsideLockup: item.unitBoxFillRatioInsideLockup, measuredTitleAssetRatio: item.measuredTitleAssetRatio, glyphOccupancyInsideUnitBox: item.glyphOccupancyInsideUnitBox, glyphOccupancyInsideLockup: item.glyphOccupancyInsideLockup, renderScaleAdjustmentApplied: item.renderScaleAdjustmentApplied, ...(item.measuredBelowMinimumReason ? { measuredBelowMinimumReason: item.measuredBelowMinimumReason } : {}), titleStylePreset: item.titleStylePreset, contrastTreatmentApplied: item.contrastTreatmentApplied, hierarchyTreatmentApplied: item.hierarchyTreatmentApplied, ...(item.titleStyleApplied !== undefined ? { titleStyleApplied: item.titleStyleApplied } : {}), ...(item.titleStyleFallbackUsed !== undefined ? { titleStyleFallbackUsed: item.titleStyleFallbackUsed } : {}), ...(item.selectedRenderVariant ? { selectedRenderVariant: item.selectedRenderVariant } : {}), ...(item.styledMeasuredTitleAssetRatio !== undefined ? { styledMeasuredTitleAssetRatio: item.styledMeasuredTitleAssetRatio } : {}), ...(item.baselineMeasuredTitleAssetRatio !== undefined ? { baselineMeasuredTitleAssetRatio: item.baselineMeasuredTitleAssetRatio } : {}), ...(item.styleMeasuredDelta !== undefined ? { styleMeasuredDelta: item.styleMeasuredDelta } : {}), estimatedTitleDominanceScore: item.estimatedTitleDominanceScore, warnings: item.warnings, recommendation: item.recommendation };
 }
 function diagnose(input: { titleAssetVisibleAreaRatio: number; lockupBoxAreaRatio: number; dominance: number; subtitleExpected: boolean; subtitleVisible: boolean; hierarchy: number; contrast: number; overlapForbidden: boolean; titleCenter?: { x: number; y: number } }): { warnings: string[]; failReasons: string[] } {
   const warnings: string[] = []; const failReasons: string[] = [];
@@ -191,6 +183,7 @@ function union(boxes: Array<TitleBox | null | undefined> | undefined): TitleBox 
   return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
 }
 function areaRatio(box: TitleBox | undefined, canvas: TitleBox): number { return round(box ? box.width * box.height / Math.max(1, canvas.width * canvas.height) : 0); }
+function areaRatioSum(boxes: TitleBox[], canvas: TitleBox): number { return round(boxes.reduce((sum, box) => sum + box.width * box.height, 0) / Math.max(1, canvas.width * canvas.height)); }
 function center(box: TitleBox, canvas: TitleBox): { x: number; y: number } { return { x: round((box.x + box.width / 2) / canvas.width), y: round((box.y + box.height / 2) / canvas.height) }; }
 function ratio(value: number | undefined, total: number): number { return round(value ? value / Math.max(1, total) : 0); }
 function overlapRatio(left: TitleBox, right: TitleBox): number { const w = Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x)); const h = Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y)); return w * h / Math.max(1, Math.min(left.width * left.height, right.width * right.height)); }

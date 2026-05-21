@@ -13,7 +13,7 @@ import {
   unitBoxes,
   validateRefinedBlueprint,
 } from "@/services/helpers/title-candidate-refiner-geometry";
-import { enforceMinimumLockupScale } from "@/services/helpers/title-candidate-refiner-scale";
+import { enforceMinimumLockupScale, withMinimumLockupScaleSafety } from "@/services/helpers/title-candidate-refiner-scale";
 import type { TitleCandidateScoringResult } from "@/services/title-candidate-scorer.service";
 import type { SpatialStrategy } from "@/services/spatial-strategy-planner.service";
 
@@ -37,6 +37,10 @@ export function refineTitleCandidates(input: RefineTitleCandidatesInput): Refine
     .filter((result) => result.recommendedAction === "refine" && !result.shouldReject)
     .sort((left, right) => (right.refinerPriority ?? 0) - (left.refinerPriority ?? 0));
   const selectedIds = new Set(selected.map((result) => result.candidateId));
+  const retryOnly = input.scorerResults
+    .filter((result) => result.recommendedAction === "keep" && !result.shouldReject && !selectedIds.has(result.candidateId))
+    .sort((left, right) => left.finalRank - right.finalRank)
+    .slice(0, 3);
   const refinedBlueprints: RefinedTitleLockupBlueprint[] = [];
   const rejectedRefinementCandidates: RejectedRefinementCandidate[] = [];
   const refinementActions: TitleRefinementActionRecord[] = [];
@@ -69,11 +73,11 @@ export function refineTitleCandidates(input: RefineTitleCandidatesInput): Refine
     refineSubtitle(blueprint, input.spatialStrategy, minGap, minSubtitleHeight, actions, refinedCandidateId);
     if (actions.length === 0) actions.push(action("preserveAsIs", blueprint.candidateId, refinedCandidateId, "candidate", null, null, "blueprint already satisfies v1 refiner geometry gates.", "neutral"));
 
-    const safety = validateRefinedBlueprint(blueprint, input.spatialStrategy, minGap);
+    const safety = withMinimumLockupScaleSafety(blueprint, validateRefinedBlueprint(blueprint, input.spatialStrategy, minGap));
     if (safety.passed) {
       refinedBlueprints.push({ sourceCandidateId: source.candidateId, refinedCandidateId, blueprint, actions, safety });
     } else {
-      const sourceSafety = validateRefinedBlueprint(source, input.spatialStrategy, minGap);
+      const sourceSafety = withMinimumLockupScaleSafety(source, validateRefinedBlueprint(source, input.spatialStrategy, minGap));
       if (sourceSafety.passed) {
         const preserve = action(
           "preserveAsIs",
@@ -97,20 +101,7 @@ export function refineTitleCandidates(input: RefineTitleCandidatesInput): Refine
   };
 
   for (const result of selected) refineOne(result);
-
-  if (selected.length > 0 && refinedBlueprints.length === 0) {
-    const replacements = input.scorerResults
-      .filter((result) => result.recommendedAction === "keep" && !result.shouldReject && !selectedIds.has(result.candidateId))
-      .sort((left, right) => left.finalRank - right.finalRank);
-    for (const result of replacements) {
-      const before = refinedBlueprints.length;
-      refineOne(result, "replacement eligible candidate after scorer-selected refinements failed: ");
-      if (refinedBlueprints.length > before) {
-        warnings.push(`replacement refiner candidate used after unsafe primary refinements: ${result.candidateId}`);
-        break;
-      }
-    }
-  }
+  for (const result of retryOnly) refineOne(result, "measured retry candidate: ");
 
   if (selected.length === 0) warnings.push("no scorer-selected non-rejected candidates entered refiner.");
   return {
@@ -122,7 +113,6 @@ export function refineTitleCandidates(input: RefineTitleCandidatesInput): Refine
     reason: `Refined ${refinedBlueprints.length} of ${selected.length} scorer-selected candidates; rejected ${rejectedRefinementCandidates.length}.`,
   };
 }
-
 function applyMinimumScale(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, actions: TitleRefinementActionRecord[], refinedCandidateId: string): void {
   const before = box(blueprint.lockupBox);
   const diagnostics = enforceMinimumLockupScale(blueprint, strategy);
@@ -130,7 +120,6 @@ function applyMinimumScale(blueprint: TitleLockupBlueprint, strategy: SpatialStr
     actions.push(action("enforceMinimumLockupScale", blueprint.candidateId, refinedCandidateId, "lockupBox", before, { lockupBox: box(blueprint.lockupBox), diagnostics }, diagnostics.titleScaleRecommendation, "requires_validation"));
   }
 }
-
 function maybeExpandLockupBox(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, actions: TitleRefinementActionRecord[], refinedCandidateId: string): void {
   const minUnitHeight = blueprint.titleUnits.length >= 3 ? 64 : 76;
   if (blueprint.titleUnits.every((unit) => unit.unitBox.height >= minUnitHeight)) return;
@@ -142,16 +131,22 @@ function maybeExpandLockupBox(blueprint: TitleLockupBlueprint, strategy: Spatial
   blueprint.spatialContract.lockupBox = { ...blueprint.lockupBox };
   if (changed(before, blueprint.lockupBox)) actions.push(action("expandLockupBox", blueprint.candidateId, refinedCandidateId, "lockupBox", before, box(blueprint.lockupBox), "expanded lockupBox to give short title units more vertical room.", "requires_validation"));
 }
-
 function rebalanceUnits(blueprint: TitleLockupBlueprint, minGap: number, actions: TitleRefinementActionRecord[], refinedCandidateId: string): void {
-  if (blueprint.titleUnits.length < 2) return;
+  if (blueprint.titleUnits.length === 0) return;
   const before = unitBoxes(blueprint.titleUnits);
   const ordered = orderedUnits(blueprint);
   const padding = Math.min(blueprint.lockupBox.safePadding, Math.round(blueprint.lockupBox.height * 0.12));
   const usableY = blueprint.lockupBox.y + padding;
   const usableHeight = blueprint.lockupBox.height - padding * 2;
   let heights = ordered.map((unit) => Math.max(unit.unitBox.height, unit.visualRole === "hero" ? 82 : 56));
-  const rawTotal = heights.reduce((sum, height) => sum + height, 0) + minGap * (ordered.length - 1);
+  let rawTotal = heights.reduce((sum, height) => sum + height, 0) + minGap * (ordered.length - 1);
+  const fillTarget = Math.min(usableHeight, Math.max(rawTotal, Math.round(usableHeight * 0.86)));
+  if (fillTarget > rawTotal) {
+    const weights = ordered.map((unit) => unit.visualRole === "hero" ? 1.35 : unit.visualRole === "lead" ? 1.05 : 0.9);
+    const weightTotal = weights.reduce((sum, value) => sum + value, 0);
+    heights = heights.map((height, index) => Math.max(height, Math.round((fillTarget - minGap * (ordered.length - 1)) * weights[index] / weightTotal)));
+    rawTotal = heights.reduce((sum, height) => sum + height, 0) + minGap * (ordered.length - 1);
+  }
   if (rawTotal > usableHeight) {
     const scale = Math.max(0.65, (usableHeight - minGap * (ordered.length - 1)) / Math.max(1, rawTotal));
     heights = heights.map((height) => Math.max(42, Math.round(height * scale)));
@@ -160,7 +155,8 @@ function rebalanceUnits(blueprint: TitleLockupBlueprint, minGap: number, actions
   let y = Math.round(usableY + Math.max(0, (usableHeight - total) / 2));
   ordered.forEach((unit, index) => {
     const nextHeight = heights[index];
-    const nextWidth = unit.visualRole === "hero" ? Math.min(blueprint.lockupBox.width - padding * 2, Math.round(unit.unitBox.width * 1.06)) : unit.unitBox.width;
+    const widthFill = unit.visualRole === "hero" ? 0.98 : 0.9;
+    const nextWidth = Math.min(blueprint.lockupBox.width - padding * 2, Math.max(unit.unitBox.width, Math.round((blueprint.lockupBox.width - padding * 2) * widthFill)));
     const centerX = unit.unitBox.x + unit.unitBox.width / 2;
     unit.unitBox = { ...unit.unitBox, x: clamp(Math.round(centerX - nextWidth / 2), blueprint.lockupBox.x, blueprint.lockupBox.x + blueprint.lockupBox.width - nextWidth), y, width: nextWidth, height: nextHeight, maxWidth: nextWidth, maxHeight: nextHeight };
     y += nextHeight + minGap;
@@ -170,7 +166,6 @@ function rebalanceUnits(blueprint: TitleLockupBlueprint, minGap: number, actions
   actions.push(action(type, blueprint.candidateId, refinedCandidateId, "titleUnits.unitBox", before, unitBoxes(blueprint.titleUnits), "rebalanced title unit boxes while preserving semantic split and reading order.", "requires_validation"));
   if (ordered.some((unit, index) => unit.visualRole === "hero" && heights[index] > before[index].height)) actions.push(action("increaseHeroUnitHeight", blueprint.candidateId, refinedCandidateId, "hero.unitBox", before, unitBoxes(blueprint.titleUnits), "hero unit height was strengthened without changing title text.", "requires_validation"));
 }
-
 function refineSubtitle(blueprint: TitleLockupBlueprint, strategy: SpatialStrategy, minGap: number, minHeight: number, actions: TitleRefinementActionRecord[], refinedCandidateId: string): void {
   if (!blueprint.subtitleLockup.text) return;
   const before = blueprint.subtitleLockup.subtitleBox ? box(blueprint.subtitleLockup.subtitleBox) : null;
@@ -189,7 +184,6 @@ function refineSubtitle(blueprint: TitleLockupBlueprint, strategy: SpatialStrate
   blueprint.subtitleLockup = { ...blueprint.subtitleLockup, placementPolicy: "hidden", subtitleBox: null };
   actions.push(action("hideUnsafeSubtitle", blueprint.candidateId, refinedCandidateId, "subtitleLockup", before, null, "subtitle remains hidden as safety fallback.", "improves_safety"));
 }
-
 function action(type: TitleRefinementActionType, sourceCandidateId: string, refinedCandidateId: string, target: string, before: unknown, after: unknown, reason: string, safetyImpact: TitleRefinementActionRecord["safetyImpact"]): TitleRefinementActionRecord {
   return { type, sourceCandidateId, refinedCandidateId, target, before, after, reason, safetyImpact };
 }

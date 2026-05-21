@@ -33,6 +33,7 @@ export type TitleFontPresetKey =
   | "literary"
   | "playful"
   | "ip";
+export type TitleRenderStylePreset = "yuanfangTitleAssetV1" | "unstyledBaseline";
 
 export type VectorGlyphWarning = {
   code: string;
@@ -97,6 +98,15 @@ export type VectorGlyphRun = {
   fontSize: number;
   fill: string;
   strokeWidth: number;
+  strokeColor?: string;
+  filterId?: string;
+  renderScaleX?: number;
+  targetTextLength?: number;
+  renderScaleAdjustmentApplied?: boolean;
+  titleStylePreset?: string;
+  contrastTreatmentApplied?: boolean;
+  hierarchyTreatmentApplied?: boolean;
+  styleSafetyWarnings?: string[];
   transform: string;
   plannedBox: TitleUnitBox;
   measuredBox?: TitleBox;
@@ -154,7 +164,7 @@ export type VectorGlyphRenderInput = {
   source: VectorGlyphRenderSource;
   blueprint: TitleLockupBlueprint;
   canvas: { width: number; height: number };
-  titleStylePreset?: TitleFontPresetKey | "auto";
+  titleStylePreset?: TitleFontPresetKey | TitleRenderStylePreset | "auto";
   brandStyle?: "yuanfangDefault";
   fontRegistry?: TitleFontRegistry;
   fontFallback?: TitleFontFallbackPolicy;
@@ -166,6 +176,7 @@ export type VectorGlyphRenderInput = {
   sizeBudget?: Partial<VectorGlyphSizeBudget>;
   measurementRequirement?: VectorGlyphMeasurementRequirement;
   rasterMeasurementResult?: RasterMeasurementResult;
+  renderSizingMode?: "default" | "occupancyBoost";
 };
 
 export type VectorGlyphRenderResult = {

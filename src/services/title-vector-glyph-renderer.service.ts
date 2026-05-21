@@ -3,10 +3,10 @@ import path from "node:path";
 import { resolveTitleFontForRole } from "@/config/title-font-registry";
 import type { TitleBox, TitleLockupBox, TitleUnitBox } from "@/config/title-lockup-blueprint";
 import { createRasterMeasurementIdentity, rasterMeasurementIdentityMatches, type TitleFontResolveResult, type VectorGlyphFontEmbedMode, type VectorGlyphMeasuredBoxes, type VectorGlyphMeasurementRequirement, type VectorGlyphOutputTarget, type VectorGlyphRenderInput, type VectorGlyphRenderResult, type VectorGlyphRun, type VectorGlyphSafetyCheck, type VectorGlyphSizeBudget, type VectorGlyphSizeBudgetResult, type VectorGlyphWarning, type VectorTitleLayer, type VectorTitleRole } from "@/models/title-vector-glyph-renderer";
-type RunStyle = { fill: string; strokeWidth: number; letterSpacing: number; lineHeightFactor: number; widthFactor: number };
+import { resolveTitleRenderStylePreset, titleRunStyle, titleStyleSvgDefs, type TitleRunStyle } from "@/services/helpers/title-vector-glyph-style";
 type RenderStrategy = { outputTarget: VectorGlyphOutputTarget; fontEmbedMode: VectorGlyphFontEmbedMode; sizeBudget: VectorGlyphSizeBudget; measurementRequirement: VectorGlyphMeasurementRequirement };
 type FontFaceAsset = { fontKey: string; family: string; css: string; filePath: string; loaded: boolean; cacheKey: string; warning?: string };
-type FitResult = { fontSize: number; measured: TitleBox; fits: boolean }; type RasterGate = { passed: boolean; identityMatches: boolean; accepted: boolean };
+type FitResult = { fontSize: number; measured: TitleBox; fits: boolean; renderScaleX: number; targetTextLength?: number; renderScaleAdjustmentApplied: boolean }; type RasterGate = { passed: boolean; identityMatches: boolean; accepted: boolean };
 const fontFaceCache = new Map<string, FontFaceAsset>(); const DEFAULT_SIZE_BUDGET: VectorGlyphSizeBudget = { debugSvgWarningBytes: 5_000_000, standaloneSvgWarningBytes: 2_000_000, productionHardLimitBytes: 1_000_000, measurementSvgTargetBytes: 250_000 };
 export function renderTitleVectorGlyph(input: VectorGlyphRenderInput): VectorGlyphRenderResult {
   const strategy = resolveRenderStrategy(input);
@@ -37,11 +37,12 @@ function createRun(input: VectorGlyphRenderInput, strategy: RenderStrategy, char
   const asset = loadFontFace(font, strategy.fontEmbedMode, charset);
   if (asset.warning) warnings.push(warning("font_face_asset_warning", asset.warning, asset.filePath || role));
   fontAssets.push(asset);
-  const style = roleStyle(role, visualWeight, allowEmphasis, font.resolvedFontKey);
+  const preset = resolveTitleRenderStylePreset(input.titleStylePreset);
+  const style = titleRunStyle(role, visualWeight, allowEmphasis, font.resolvedFontKey, input.renderSizingMode === "occupancyBoost", preset);
   const fit = fitTextBox(text, plannedBox, style, alignment);
   if (!fit.fits) warnings.push(warning("estimated_fit_failed", "estimated text box cannot fit inside planned unitBox at minimum font size", runId));
   if (direction === "vertical") warnings.push(warning("vertical_direction_conservative_render", "direction=vertical is rendered conservatively in Real SVG v1; no per-character vertical layout.", runId));
-  return { runId, text, role, font, fontSize: fit.fontSize, fill: style.fill, strokeWidth: style.strokeWidth, transform: `rotate(${plannedBox.rotationDeg})`, plannedBox, measuredBox: fit.measured, fontEmbedded: asset.loaded, estimated: true, visualWeight, allowEmphasis, rotationDeg: plannedBox.rotationDeg };
+  return { runId, text, role, font, fontSize: fit.fontSize, fill: style.fill, strokeWidth: style.strokeWidth, strokeColor: style.strokeColor, filterId: style.filterId, renderScaleX: fit.renderScaleX, targetTextLength: fit.targetTextLength, renderScaleAdjustmentApplied: fit.renderScaleAdjustmentApplied, titleStylePreset: preset, contrastTreatmentApplied: style.contrastTreatmentApplied, hierarchyTreatmentApplied: style.hierarchyTreatmentApplied, styleSafetyWarnings: style.styleSafetyWarnings, transform: `rotate(${plannedBox.rotationDeg})`, plannedBox, measuredBox: fit.measured, fontEmbedded: asset.loaded, estimated: true, visualWeight, allowEmphasis, rotationDeg: plannedBox.rotationDeg };
 }
 function createSubtitleRun(input: VectorGlyphRenderInput, strategy: RenderStrategy, charset: string, warnings: VectorGlyphWarning[], fontAssets: FontFaceAsset[]): VectorGlyphRun | null {
   const subtitleBox = input.blueprint.subtitleLockup.subtitleBox;
@@ -76,24 +77,26 @@ function createSafetyChecks(input: VectorGlyphRenderInput, strategy: RenderStrat
   ];
 }
 function renderRealSvg(input: VectorGlyphRenderInput, strategy: RenderStrategy, runs: readonly VectorGlyphRun[], assets: readonly FontFaceAsset[]): string {
+  const preset = resolveTitleRenderStylePreset(input.titleStylePreset);
   const css = Array.from(new Set(assets.filter((asset) => asset.loaded).map((asset) => asset.css))).join("\n");
   const body = runs.map((run) => renderRun(run)).join("");
   const debug = strategy.outputTarget === "debugSvg" && input.renderMode === "debug" ? renderDebugOverlay(input, runs) : "";
-  return `<svg width="${input.canvas.width}" height="${input.canvas.height}" viewBox="0 0 ${input.canvas.width} ${input.canvas.height}" xmlns="http://www.w3.org/2000/svg" data-output-target="${strategy.outputTarget}" data-font-embed-mode="${strategy.fontEmbedMode}"><defs><style><![CDATA[${css}
-.title-run{dominant-baseline:alphabetic;paint-order:stroke fill;stroke-linejoin:round;stroke-linecap:round}.debug-box{fill:none;stroke-width:2;vector-effect:non-scaling-stroke}.debug-label{font-family:Arial,sans-serif;font-size:12px;fill:#64748b}]]></style><linearGradient id="titleHeroGradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#004089"/><stop offset="100%" stop-color="#00A3FF"/></linearGradient><filter id="titleShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#001B44" flood-opacity=".28"/></filter><filter id="titleGlow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#5CC8FF" flood-opacity=".42"/></filter></defs><g id="title-lockup" data-candidate-id="${escapeXml(input.blueprint.candidateId)}">${body}</g>${debug}</svg>`;
+  return `<svg width="${input.canvas.width}" height="${input.canvas.height}" viewBox="0 0 ${input.canvas.width} ${input.canvas.height}" xmlns="http://www.w3.org/2000/svg" data-output-target="${strategy.outputTarget}" data-font-embed-mode="${strategy.fontEmbedMode}" data-title-style-preset="${preset}"><defs><style><![CDATA[${css}
+.title-run{dominant-baseline:alphabetic;paint-order:stroke fill;stroke-linejoin:round;stroke-linecap:round}.debug-box{fill:none;stroke-width:2;vector-effect:non-scaling-stroke}.debug-label{font-family:Arial,sans-serif;font-size:12px;fill:#64748b}]]></style>${titleStyleSvgDefs(preset)}</defs><g id="title-lockup" data-candidate-id="${escapeXml(input.blueprint.candidateId)}">${body}</g>${debug}</svg>`;
 }
 function renderRun(run: VectorGlyphRun): string {
   const m = run.measuredBox ?? box(run.plannedBox);
   const cx = run.plannedBox.x + run.plannedBox.width / 2;
   const cy = run.plannedBox.y + run.plannedBox.height / 2;
   const rotate = run.rotationDeg ? ` transform="rotate(${run.rotationDeg} ${round(cx)} ${round(cy)})"` : "";
-  const stroke = run.strokeWidth > 0 ? ` stroke="#fffaf0" stroke-width="${run.strokeWidth}"` : "";
-  const filter = run.allowEmphasis && (run.role === "hero" || run.role === "lead") ? ` filter="url(#${run.role === "hero" ? "titleGlow" : "titleShadow"})"` : "";
+  const stroke = run.strokeWidth > 0 ? ` stroke="${run.strokeColor ?? "#fffaf0"}" stroke-width="${run.strokeWidth}"` : "";
+  const filter = run.filterId ? ` filter="url(#${run.filterId})"` : "";
   const x = round(m.x + m.width / 2);
   const y = round(m.y + m.height * 0.78);
   const key = run.font.resolvedFontKey ?? "system";
   const decor = run.role === "accent" && run.allowEmphasis ? `<circle cx="${round(m.x + m.width + 8)}" cy="${round(m.y + 8)}" r="4" fill="#EF7A00" opacity=".8"/>` : "";
-  return `<g id="${escapeXml(run.runId)}" data-role="${run.role}" data-font-key="${escapeXml(key)}"${rotate}><text class="title-run role-${run.role}" x="${x}" y="${y}" text-anchor="middle" font-family="${escapeXml(run.font.family)}" font-size="${run.fontSize}" font-weight="${run.font.weight}" font-style="${run.font.style}" fill="${run.fill}"${stroke}${filter}>${escapeXml(run.text)}</text>${decor}</g>`;
+  const lengthAttrs = run.targetTextLength ? ` textLength="${run.targetTextLength}" lengthAdjust="spacingAndGlyphs" data-render-scale-x="${run.renderScaleX ?? 1}"` : "";
+  return `<g id="${escapeXml(run.runId)}" data-role="${run.role}" data-font-key="${escapeXml(key)}"${rotate}><text class="title-run role-${run.role}" x="${x}" y="${y}" text-anchor="middle" font-family="${escapeXml(run.font.family)}" font-size="${run.fontSize}" font-weight="${run.font.weight}" font-style="${run.font.style}" fill="${run.fill}"${stroke}${filter}${lengthAttrs}>${escapeXml(run.text)}</text>${decor}</g>`;
 }
 function renderDebugOverlay(input: VectorGlyphRenderInput, runs: readonly VectorGlyphRun[]): string {
   const bp = input.blueprint;
@@ -101,13 +104,14 @@ function renderDebugOverlay(input: VectorGlyphRenderInput, runs: readonly Vector
   const unitRects = runs.map((run) => `${rect(run.plannedBox, run.role === "subtitle" ? "#fb923c" : "#0ea5e9", "4 4")}${run.measuredBox ? rect(run.measuredBox, "#22c55e", "") : ""}<text class="debug-label" x="${run.plannedBox.x}" y="${Math.max(12, run.plannedBox.y - 4)}">${escapeXml(run.role)}:${escapeXml(run.text)}</text>`).join("");
   return `<g id="debug-overlay" opacity=".88">${lock}${unitRects}</g>`;
 }
-function fitTextBox(text: string, planned: TitleUnitBox, style: RunStyle, alignment: string): FitResult {
-  let low = 8, high = Math.max(8, planned.height * 0.88), best = low;
-  for (let i = 0; i < 18; i += 1) { const mid = (low + high) / 2, measured = estimateTextBox(text, mid, style); if (measured.width <= planned.width && measured.height <= planned.height) { best = mid; low = mid; } else high = mid; }
-  const measured = estimateTextBox(text, best, style);
-  return { fontSize: Math.max(1, round(best)), measured: placeMeasured(planned, measured, alignment), fits: measured.width <= planned.width && measured.height <= planned.height };
+function fitTextBox(text: string, planned: TitleUnitBox, style: TitleRunStyle, alignment: string): FitResult {
+  let low = 8, high = Math.max(8, planned.height * style.fontSizeCap), best = low;
+  for (let i = 0; i < 18; i += 1) { const mid = (low + high) / 2, measured = estimateTextBox(text, mid, style); if ((style.forceTextLength || measured.width <= planned.width) && measured.height <= planned.height) { best = mid; low = mid; } else high = mid; }
+  const base = estimateTextBox(text, best, style), baseAdvance = Math.max(1, base.width - style.strokeWidth * 2), maxAdvance = Math.max(1, planned.width - style.strokeWidth * 2 - 4), targetAdvance = Math.min(maxAdvance, Math.max(1, planned.width * style.targetWidthOccupancy - style.strokeWidth * 2));
+  const renderScaleX = round(targetAdvance / baseAdvance), measured = { ...base, width: round(targetAdvance + style.strokeWidth * 2) }, adjusted = style.forceTextLength || renderScaleX > 1.03 || renderScaleX < 0.97;
+  return { fontSize: Math.max(1, round(best)), measured: placeMeasured(planned, measured, alignment), fits: measured.width <= planned.width && measured.height <= planned.height, renderScaleX, ...(adjusted ? { targetTextLength: round(targetAdvance) } : {}), renderScaleAdjustmentApplied: adjusted };
 }
-function estimateTextBox(text: string, fontSize: number, style: RunStyle): TitleBox {
+function estimateTextBox(text: string, fontSize: number, style: TitleRunStyle): TitleBox {
   const count = Array.from(text).length, width = count * fontSize * style.widthFactor + Math.max(0, count - 1) * style.letterSpacing + style.strokeWidth * 2, height = fontSize * style.lineHeightFactor + style.strokeWidth * 2;
   return { x: 0, y: 0, width: round(width), height: round(height) };
 }
@@ -126,13 +130,6 @@ function loadFontFace(font: TitleFontResolveResult, embedMode: VectorGlyphFontEm
   const base64 = readFileSync(absolutePath).toString("base64");
   const css = `@font-face{font-family:"${escapeCss(font.family)}";src:url("data:${fontMime(font.filePath)};base64,${base64}") format("${fontFormat(font.filePath)}");font-weight:${font.weight};font-style:${font.style};font-display:block;}`;
   return cacheFont(cacheKey, { fontKey: font.resolvedFontKey, family: font.family, css, filePath: font.filePath, loaded: true, cacheKey });
-}
-function roleStyle(role: VectorTitleRole, weight: number, allow: boolean, fontKey: string | null): RunStyle {
-  const w = widthFactor(fontKey);
-  if (role === "hero") return { fill: allow ? "url(#titleHeroGradient)" : "#004089", strokeWidth: allow ? clamp(2 + weight * 0.35, 2, 4) : 1, letterSpacing: 0, lineHeightFactor: 1.08, widthFactor: w };
-  if (role === "lead") return { fill: "#004089", strokeWidth: allow ? clamp(1 + weight * 0.18, 1, 2) : 0.8, letterSpacing: 0, lineHeightFactor: 1.08, widthFactor: w };
-  if (role === "accent") return { fill: allow ? "#EF7A00" : "#C86600", strokeWidth: allow ? 1.2 : 0.6, letterSpacing: 0, lineHeightFactor: 1.08, widthFactor: w };
-  return { fill: role === "subtitle" ? "#334155" : "#475569", strokeWidth: 0, letterSpacing: 0, lineHeightFactor: 1.08, widthFactor: w };
 }
 function createLayers(runs: readonly VectorGlyphRun[], debug: boolean): VectorTitleLayer[] {
   const layers = runs.map((run, index) => ({ layerId: run.runId, kind: run.role === "subtitle" ? "subtitle" as const : "glyphRun" as const, role: run.role, text: run.text, plannedBox: run.plannedBox, zIndex: index + 1, opacity: 1, reason: "real SVG font run with estimated measured box." }));
@@ -175,11 +172,9 @@ function fontCacheKey(fontKey: string, charset: string, filePath: string, mtimeM
 function cacheFont(key: string, asset: FontFaceAsset): FontFaceAsset { fontFaceCache.set(key, asset); return asset; }
 function check(code: string, passed: boolean, severity: "error" | "warning", reason: string): VectorGlyphSafetyCheck { return { checkId: code, code, passed, severity, reason }; }
 function warning(code: string, message: string, target: string): VectorGlyphWarning { return { code, severity: "warning", message, target }; }
-function widthFactor(fontKey: string | null): number { return fontKey?.includes("Marker") || fontKey?.includes("Rounded") ? 1.04 : 1.06; }
 function placeMeasured(planned: TitleUnitBox, measured: TitleBox, alignment: string): TitleBox {
   const x = alignment === "left" ? planned.x : alignment === "right" ? planned.x + planned.width - measured.width : planned.x + (planned.width - measured.width) / 2;
-  return { x: round(x), y: round(planned.y + (planned.height - measured.height) / 2), width: measured.width, height: measured.height };
-}
+  return { x: round(x), y: round(planned.y + (planned.height - measured.height) / 2), width: measured.width, height: measured.height }; }
 function inside(inner: TitleBox, outer: TitleBox): boolean { return inner.x >= outer.x - 0.01 && inner.y >= outer.y - 0.01 && inner.x + inner.width <= outer.x + outer.width + 0.01 && inner.y + inner.height <= outer.y + outer.height + 0.01; }
 function overlaps(a: TitleBox, b: TitleBox): boolean { return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y; }
 function sameLockupBox(left: TitleLockupBox, right: TitleLockupBox): boolean { return left.x === right.x && left.y === right.y && left.width === right.width && left.height === right.height && left.safePadding === right.safePadding && left.allowedOverflowPx === right.allowedOverflowPx; }
@@ -195,5 +190,4 @@ function fontMime(filePath: string): string { return filePath.endsWith(".woff2")
 function fontFormat(filePath: string): string { return filePath.endsWith(".woff2") ? "woff2" : filePath.endsWith(".woff") ? "woff" : filePath.endsWith(".otf") ? "opentype" : "truetype"; }
 function escapeCss(value: string): string { return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"'); }
 function escapeXml(value: string): string { return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
-function clamp(value: number, min: number, max: number): number { return Math.min(max, Math.max(min, value)); }
 function round(value: number): number { return Math.round(value * 100) / 100; }
