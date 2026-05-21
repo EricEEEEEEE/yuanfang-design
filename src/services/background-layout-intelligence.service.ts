@@ -133,32 +133,35 @@ export async function analyzeBackgroundLayout(
 
   try {
     const client = new OpenAI({ apiKey });
-    const response = await client.chat.completions.create({
-      model: MODELS.recommendation,
-      messages: [
-        { role: "system", content: buildSystemPrompt() },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: buildUserPrompt(input) },
-            { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-    });
-    const { analysis, diagnostic } = parseAnalysisWithDiagnostic(response.choices[0]?.message?.content);
+    const diagnostics: BackgroundLayoutValidationDiagnostic[] = [];
 
-    if (!analysis) {
-      const reason = diagnostic.reason || "unknown validation error";
-      return fallback(
-        `AI output invalid: ${reason}; used fallback background layout analysis.`,
-        fallbackReasonCodeForDiagnostic(reason),
-      );
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const response = await client.chat.completions.create({
+        model: MODELS.recommendation,
+        messages: [
+          { role: "system", content: buildSystemPrompt() },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: buildUserPrompt(input) },
+              { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
+            ],
+          },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.2,
+      });
+      const { analysis, diagnostic } = parseAnalysisWithDiagnostic(response.choices[0]?.message?.content);
+
+      if (analysis) return { source: "ai", ...analysis };
+      diagnostics.push(diagnostic);
     }
 
-    return { source: "ai", ...analysis };
+    const reason = diagnostics.map((item) => item.reason || "unknown validation error").join(" | ");
+    return fallback(
+      `AI output invalid after retry: ${reason}; used fallback background layout analysis.`,
+      fallbackReasonCodeForDiagnostic(reason),
+    );
   } catch (error) {
     return fallback(`AI background layout analysis failed: ${errorMessage(error)}; used fallback.`, "openai_api_error");
   }

@@ -9,6 +9,7 @@ import {
   TITLE_SEMANTIC_SPLITS,
   type TitleSemanticSplitCandidate,
 } from "@/config/title-semantic-splitter";
+import { createGenericSemanticSplitCandidates } from "@/config/title-generic-semantic-splits";
 import {
   TITLE_LOCKUP_BLUEPRINT_RULES,
   type TitleLockupBlueprint,
@@ -114,7 +115,7 @@ export type GenerateTitleCandidatesInput = {
 };
 
 export type GenerateTitleCandidatesResult = {
-  source: "ai" | "fallback";
+  source: "ai" | "rule-based" | "fallback";
   structuredOutputMode: "json_schema" | "zod" | "unavailable";
   lockupDraftCount: number;
   lockupDraftFields: string[];
@@ -218,6 +219,7 @@ const TITLE_UNIT_ALIGNMENTS: readonly TitleUnitAlignment[] = ["left", "center", 
 const SUBTITLE_PLACEMENT_POLICIES: readonly TitleSubtitlePlacementPolicy[] = ["belowMainLockup", "sideOfMainLockup", "secondaryAnchor", "hidden"];
 const COLLISION_STRATEGIES: readonly TitleCollisionStrategy[] = ["reject", "moveWithinAnchor", "shrinkWithinAnchor", "scorePenalty"];
 const FORBIDDEN_ZONE_CONFLICTS: readonly TitleForbiddenZoneConflict[] = ["reject", "moveWithinAnchor", "shrinkWithinAnchor"];
+const MIN_READABLE_VERTICAL_ANCHOR_WIDTH = 320;
 const STRUCTURED_OUTPUT_MODE = "json_schema" as const;
 const TITLE_LOCKUP_DRAFTS_JSON_SCHEMA = {
   type: "object",
@@ -294,90 +296,101 @@ export async function generateTitleCandidates(
     );
   }
 
-  try {
-    const client = new OpenAI({ apiKey });
-    const response = await client.chat.completions.create({
-      model: MODELS.recommendation,
-      messages: [
-        { role: "system", content: buildSystemPrompt() },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: buildUserPrompt(input, spatialStrategy, candidatePlan) },
-            { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
-          ],
-        },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "title_lockup_drafts",
-          strict: true,
-          schema: TITLE_LOCKUP_DRAFTS_JSON_SCHEMA,
-        },
-      },
-      temperature: 0.65,
-    });
-    const parsedDrafts = parseLockupDraftsWithDiagnostic(
-      response.choices[0]?.message?.content,
-      input.mainTitle,
-      spatialStrategy,
-      candidatePlan,
-    );
+  const client = new OpenAI({ apiKey });
+  const validationDiagnostics: string[] = [];
+  let sawStructuredValidationFailure = false;
 
-    if (!parsedDrafts.lockupDrafts) {
-      return fallback(
-        input,
-        `AI structured lockupDraft output invalid: ${formatDiagnostic(parsedDrafts.diagnostic)}; used fallback candidates.`,
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const response = await client.chat.completions.create({
+        model: MODELS.recommendation,
+        messages: [
+          { role: "system", content: buildSystemPrompt() },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: buildUserPrompt(input, spatialStrategy, candidatePlan) },
+              { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
+            ],
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "title_lockup_drafts",
+            strict: true,
+            schema: TITLE_LOCKUP_DRAFTS_JSON_SCHEMA,
+          },
+        },
+        temperature: 0.65,
+      });
+      const parsedDrafts = parseLockupDraftsWithDiagnostic(
+        response.choices[0]?.message?.content,
+        input.mainTitle,
         spatialStrategy,
         candidatePlan,
-        STRUCTURED_OUTPUT_MODE,
       );
-    }
 
-    const parsedBlueprints = buildBlueprintsFromDraftsWithDiagnostic(
-      input,
-      parsedDrafts.lockupDrafts,
-      spatialStrategy,
-      candidatePlan,
-    );
+      if (!parsedDrafts.lockupDrafts) {
+        sawStructuredValidationFailure = true;
+        validationDiagnostics.push(`attempt ${attempt} draft invalid: ${formatDiagnostic(parsedDrafts.diagnostic)}`);
+        continue;
+      }
 
-    if (!parsedBlueprints.lockupBlueprints) {
-      return fallback(
+      const parsedBlueprints = buildBlueprintsFromDraftsWithDiagnostic(
         input,
-        `AI lockupDraft business validation failed: ${formatDiagnostic(parsedBlueprints.diagnostic)}; used fallback candidates.`,
+        parsedDrafts.lockupDrafts,
         spatialStrategy,
         candidatePlan,
-        STRUCTURED_OUTPUT_MODE,
       );
+
+      if (!parsedBlueprints.lockupBlueprints) {
+        sawStructuredValidationFailure = true;
+        validationDiagnostics.push(`attempt ${attempt} blueprint invalid: ${formatDiagnostic(parsedBlueprints.diagnostic)}`);
+        continue;
+      }
+
+      const candidates = buildLegacyCandidatesFromBlueprints(
+        parsedBlueprints.lockupBlueprints,
+        spatialStrategy,
+      );
+
+      return {
+        source: "ai",
+        structuredOutputMode: STRUCTURED_OUTPUT_MODE,
+        lockupDraftCount: parsedDrafts.lockupDrafts.length,
+        lockupDraftFields: getLockupDraftFields(parsedDrafts.lockupDrafts),
+        firstDraftUnitLayoutHints: parsedDrafts.lockupDrafts[0]?.unitLayoutHints ?? [],
+        lockupBlueprints: parsedBlueprints.lockupBlueprints,
+        candidates,
+        reason: "AI generated validated structured lockupDrafts; system completed TitleLockupBlueprints.",
+        spatialStrategy,
+        titleHierarchyContext: input.titleHierarchyContext,
+      };
+    } catch (error) {
+      validationDiagnostics.push(`attempt ${attempt} request failed: ${errorMessage(error)}`);
     }
+  }
 
-    const candidates = buildLegacyCandidatesFromBlueprints(
-      parsedBlueprints.lockupBlueprints,
-      spatialStrategy,
-    );
-
-    return {
-      source: "ai",
-      structuredOutputMode: STRUCTURED_OUTPUT_MODE,
-      lockupDraftCount: parsedDrafts.lockupDrafts.length,
-      lockupDraftFields: getLockupDraftFields(parsedDrafts.lockupDrafts),
-      firstDraftUnitLayoutHints: parsedDrafts.lockupDrafts[0]?.unitLayoutHints ?? [],
-      lockupBlueprints: parsedBlueprints.lockupBlueprints,
-      candidates,
-      reason: "AI generated validated structured lockupDrafts; system completed TitleLockupBlueprints.",
-      spatialStrategy,
-      titleHierarchyContext: input.titleHierarchyContext,
-    };
-  } catch (error) {
-    return fallback(
+  if (sawStructuredValidationFailure) {
+    const ruleBasedResult = ruleBasedFromCandidatePlan(
       input,
-      `structured output request failed: ${errorMessage(error)}; used fallback candidates.`,
+      `AI title lockup output invalid after retry: ${validationDiagnostics.join(" | ")}; used deterministic candidatePlan title lockups.`,
       spatialStrategy,
       candidatePlan,
       STRUCTURED_OUTPUT_MODE,
     );
+
+    if (ruleBasedResult) return ruleBasedResult;
   }
+
+  return fallback(
+    input,
+    `AI title lockup output invalid after retry: ${validationDiagnostics.join(" | ")}; used fallback candidates.`,
+    spatialStrategy,
+    candidatePlan,
+    STRUCTURED_OUTPUT_MODE,
+  );
 }
 
 function buildSystemPrompt(): string {
@@ -2209,17 +2222,27 @@ function normalizePrimaryTextAnchor(
 
   const safeZone = spatialStrategy.backgroundLayout.safeZones.find((zone) => zone.id === anchor.safeZoneId);
 
-  if (!safeZone || safeZone.shape !== "verticalColumn") {
+  if (!safeZone || !shouldExpandPrimaryAnchorFromSafeZone(anchor, safeZone)) {
     return anchor;
   }
 
   const expandedAnchor = expandPrimaryAnchorFromVerticalSafeZone(anchor, safeZone);
 
-  return expandedAnchor.height > anchor.height ? avoidForbiddenZonesForPrimaryAnchor(
+  return expandedAnchor.height > anchor.height || expandedAnchor.width > anchor.width ? avoidForbiddenZonesForPrimaryAnchor(
     expandedAnchor,
     safeZone,
     spatialStrategy.backgroundLayout.forbiddenZones,
   ) : anchor;
+}
+
+function shouldExpandPrimaryAnchorFromSafeZone(
+  anchor: TextAnchor,
+  safeZone: { shape?: string; width: number; height: number },
+): boolean {
+  if (safeZone.shape === "verticalColumn") return true;
+  return safeZone.shape === "centerBlock" &&
+    safeZone.height >= 320 &&
+    safeZone.height >= anchor.height * 1.35;
 }
 
 function expandPrimaryAnchorFromVerticalSafeZone(
@@ -2230,15 +2253,15 @@ function expandPrimaryAnchorFromVerticalSafeZone(
     safeZone.height - 2,
     Math.max(anchor.height, safeZone.height * 0.78, 360),
   ));
+  const targetWidth = Math.round(Math.min(
+    safeZone.width - 2,
+    Math.max(anchor.width, safeZone.width * 0.76, Math.min(MIN_READABLE_VERTICAL_ANCHOR_WIDTH, safeZone.width - 2)),
+  ));
 
-  if (anchor.height >= targetHeight * 0.82) {
+  if (anchor.height >= targetHeight * 0.82 && anchor.width >= targetWidth * 0.92) {
     return anchor;
   }
 
-  const targetWidth = Math.round(Math.min(
-    safeZone.width - 2,
-    Math.max(anchor.width, safeZone.width * 0.76),
-  ));
   const x = Math.round(clamp(
     safeZone.x + (safeZone.width - targetWidth) / 2,
     safeZone.x + 1,
@@ -2257,7 +2280,7 @@ function expandPrimaryAnchorFromVerticalSafeZone(
     width: targetWidth,
     height: targetHeight,
     preferredOrientation: "vertical",
-    reason: `${anchor.reason} System expanded primary anchor from verticalColumn safeZone.`,
+    reason: `${anchor.reason} System expanded primary anchor from verticalColumn safeZone for readable horizontal title units.`,
   };
 }
 
@@ -2517,6 +2540,43 @@ function fallback(
     lockupBlueprints,
     candidates,
     reason: fallbackResult.reason,
+    spatialStrategy,
+    titleHierarchyContext: input.titleHierarchyContext,
+  };
+}
+
+function ruleBasedFromCandidatePlan(
+  input: GenerateTitleCandidatesInput,
+  reason: string,
+  spatialStrategy: SpatialStrategy,
+  candidatePlan: readonly LockupBlueprintCandidatePlanItem[],
+  structuredOutputMode: GenerateTitleCandidatesResult["structuredOutputMode"],
+): GenerateTitleCandidatesResult | undefined {
+  const drafts = buildFallbackLockupDrafts(input, spatialStrategy, candidatePlan);
+  const parsedBlueprints = buildBlueprintsFromDraftsWithDiagnostic(
+    input,
+    drafts,
+    spatialStrategy,
+    candidatePlan,
+    false,
+  );
+
+  if (!parsedBlueprints.lockupBlueprints || parsedBlueprints.lockupBlueprints.length < 6) {
+    return undefined;
+  }
+
+  const lockupBlueprints = parsedBlueprints.lockupBlueprints;
+  const candidates = buildLegacyCandidatesFromBlueprints(lockupBlueprints, spatialStrategy);
+
+  return {
+    source: "rule-based",
+    structuredOutputMode,
+    lockupDraftCount: drafts.length,
+    lockupDraftFields: getLockupDraftFields(drafts),
+    firstDraftUnitLayoutHints: drafts[0]?.unitLayoutHints ?? [],
+    lockupBlueprints,
+    candidates,
+    reason,
     spatialStrategy,
     titleHierarchyContext: input.titleHierarchyContext,
   };
@@ -3516,30 +3576,7 @@ function getSemanticSplitCandidates(mainTitle: string): TitleSemanticSplitCandid
     return configured.candidates;
   }
 
-  return [
-    {
-      splitId: "fullTitleFallback",
-      label: "完整标题兜底切分",
-      suitableFor: ["未知标题", "诊断回退"],
-      titleLengthRange: { min: mainTitle.length, max: mainTitle.length },
-      contentIntent: "未知标题先保持完整，避免错误切字。",
-      units: [
-        {
-          text: mainTitle,
-          semanticRole: "hero",
-          visualRoleHint: "hero",
-          importance: 5,
-          allowEmphasis: true,
-          allowLineBreakAfter: false,
-        },
-      ],
-      readingOrder: [mainTitle],
-      preferredCompositionModes: ["stageMonument", "centerStageLockup"],
-      avoidCompositionModes: ["platformCaption"],
-      reason: "没有命中配置语义切分时，保持标题完整最安全。",
-      forbiddenSplitWarning: "禁止为了造型随机切分未知中文标题。",
-    },
-  ];
+  return createGenericSemanticSplitCandidates(mainTitle);
 }
 
 function getSemanticSplitCandidateById(

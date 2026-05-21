@@ -2,6 +2,8 @@ import type { TitleBox, TitleLockupBlueprint } from "@/config/title-lockup-bluep
 import type { RasterMeasurementResult } from "@/models/title-raster-measurement";
 import { MIN_ACCEPTABLE_LOCKUP_AREA_RATIO } from "@/services/helpers/title-candidate-refiner-scale";
 
+export const MIN_ACCEPTABLE_MEASURED_TITLE_AREA_RATIO = 0.025;
+
 export type TitleAssetVisualScaleMetrics = {
   blueprintLockupRatio: number;
   unitBoxAggregateRatio: number;
@@ -54,7 +56,7 @@ export function evaluateTitleAssetVisualScale(blueprint: TitleLockupBlueprint, m
   const styleSafetyWarnings = Array.from(new Set(measurement.runMeasurements.flatMap((run) => run.styleSafetyWarnings ?? [])));
   const titleStylePreset = measurement.runMeasurements.find((run) => run.titleStylePreset)?.titleStylePreset ?? "unknown";
   const transparentPaddingRatio = measurement.groupInkBox ? round(1 - measurement.groupInkBox.alphaPixelCount / Math.max(1, measurement.groupInkBox.width * measurement.groupInkBox.height)) : 1;
-  const measuredBelowMinimumReason = measuredTitleAssetRatio < MIN_ACCEPTABLE_LOCKUP_AREA_RATIO ? `measured_title_bbox_below_minimum:${measuredTitleAssetRatio}<${MIN_ACCEPTABLE_LOCKUP_AREA_RATIO}` : undefined;
+  const measuredBelowMinimumReason = measuredTitleAssetRatio < MIN_ACCEPTABLE_MEASURED_TITLE_AREA_RATIO ? `measured_title_bbox_below_minimum:${measuredTitleAssetRatio}<${MIN_ACCEPTABLE_MEASURED_TITLE_AREA_RATIO}` : undefined;
   const renderSizingBlockedReason = measuredBelowMinimumReason ? (renderScaleAdjustmentApplied ? "render_scale_adjustment_insufficient" : "render_scale_not_applied") : undefined;
   const metrics: TitleAssetVisualScaleMetrics = {
     blueprintLockupRatio,

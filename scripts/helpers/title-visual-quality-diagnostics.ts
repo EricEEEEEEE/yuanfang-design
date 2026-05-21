@@ -5,6 +5,7 @@ import type { TitleVisualQualityCompactRow, TitleVisualQualityDiagnostics, Title
 export type BuildTitleVisualQualityInput = { sampleId: string; sampleName: string; result: StandardGenerationResult; backgroundLuminance?: number };
 const TARGET_LOCKUP_AREA_RATIO = 0.16;
 const MIN_ACCEPTABLE_LOCKUP_AREA_RATIO = 0.06;
+const MIN_ACCEPTABLE_MEASURED_TITLE_AREA_RATIO = 0.025;
 export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualityInput): TitleVisualQualityDiagnostics {
   const { result } = input;
   const asset = result.titleAssetResult?.titleAsset;
@@ -43,7 +44,7 @@ export function buildTitleVisualQualityDiagnostics(input: BuildTitleVisualQualit
   const group = asset?.rasterMeasurementResult?.groupInkBox;
   const transparentPaddingRatio = round(group ? 1 - group.alphaPixelCount / Math.max(1, group.width * group.height) : 0);
   const selectedScaledBlueprintUsed = Boolean(asset && asset.candidateId === selectedCandidateId && asset.canvas.width === canvas.width && asset.canvas.height === canvas.height);
-  const measuredBelowMinimumReason = measuredTitleAssetRatio < MIN_ACCEPTABLE_LOCKUP_AREA_RATIO ? `measured_title_bbox_below_minimum:${measuredTitleAssetRatio}<${MIN_ACCEPTABLE_LOCKUP_AREA_RATIO}` : undefined;
+  const measuredBelowMinimumReason = measuredTitleAssetRatio < MIN_ACCEPTABLE_MEASURED_TITLE_AREA_RATIO ? `measured_title_bbox_below_minimum:${measuredTitleAssetRatio}<${MIN_ACCEPTABLE_MEASURED_TITLE_AREA_RATIO}` : undefined;
   const titleStylePreset = scaleMetrics?.titleStylePreset ?? "unknown";
   const contrastTreatmentApplied = Boolean(scaleMetrics?.contrastTreatmentApplied);
   const hierarchyTreatmentApplied = Boolean(scaleMetrics?.hierarchyTreatmentApplied);
