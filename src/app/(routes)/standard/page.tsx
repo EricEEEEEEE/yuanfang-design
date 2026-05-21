@@ -13,7 +13,11 @@ import {
 } from "@/ui/components/StandardFormV2";
 import { StandardPosterPreview } from "@/ui/components/StandardPosterPreview";
 
+const INTERNAL_TEST_TOKEN = process.env.NEXT_PUBLIC_YUANFANG_INTERNAL_TEST_TOKEN?.trim() ?? "";
+const DEBUG_ENABLED = process.env.NEXT_PUBLIC_YUANFANG_STANDARD_DEBUG === "1";
+
 function readableError(statusCode: number, response?: StandardGenerateV2Response): string {
+  if (statusCode === 401) return "当前测试入口无访问权限，请联系管理员。";
   if (statusCode >= 500) return "系统暂时不可用，请稍后重试。";
   if (response?.error?.userMessage) return response.error.userMessage;
   if (statusCode === 422) return "生成未通过安全检查，请调整描述后重试。";
@@ -47,7 +51,7 @@ function validate(values: StandardFormV2Values): StandardFormV2Errors {
   return errors;
 }
 
-function buildRequest(values: StandardFormV2Values): StandardGenerateV2Request {
+function buildRequest(values: StandardFormV2Values, debugEnabled: boolean): StandardGenerateV2Request {
   return {
     source: "standard-form-v2",
     brandKey: "yuanfangDefault",
@@ -72,7 +76,7 @@ function buildRequest(values: StandardFormV2Values): StandardGenerateV2Request {
       includeCampusInfo: false,
       outputMimeType: "image/jpeg",
       jpegQuality: 78,
-      debug: true,
+      debug: debugEnabled,
     },
   };
 }
@@ -98,6 +102,12 @@ export default function StandardPage() {
       setResult(null);
       return;
     }
+    if (!INTERNAL_TEST_TOKEN) {
+      setStatus("failed");
+      setMessage("当前测试入口未配置访问令牌，请联系管理员后再试。");
+      setResult(null);
+      return;
+    }
 
     setStatus("submitting");
     setMessage("");
@@ -106,8 +116,8 @@ export default function StandardPage() {
     try {
       const response = await fetch("/api/generate/standard/v2", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildRequest(values)),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${INTERNAL_TEST_TOKEN}` },
+        body: JSON.stringify(buildRequest(values, DEBUG_ENABLED)),
       });
       const body = (await response.json()) as StandardGenerateV2Response;
       if (!response.ok || !body.ok || !body.output?.base64) {
@@ -136,7 +146,7 @@ export default function StandardPage() {
           <StandardPosterPreview base64={result.output.base64} height={result.output.height} mimeType={result.output.mimeType} width={result.output.width} />
         ) : null}
 
-        {result?.diagnostics || result?.safety ? <StandardDebugPanel response={result} /> : null}
+        {DEBUG_ENABLED && (result?.diagnostics || result?.safety) ? <StandardDebugPanel response={result} /> : null}
       </section>
     </main>
   );

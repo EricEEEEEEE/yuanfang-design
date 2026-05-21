@@ -1,9 +1,11 @@
-import { callApi, guard, posterStatus } from "./standard-api-v2-client";
+import { callApi, guard, hasRawStackTrace, posterStatus } from "./standard-api-v2-client";
 import { QUALITY_PAYLOAD, VALID_PAYLOAD } from "./standard-api-v2-fixtures";
 import { printQualitySample, printValid } from "./standard-api-v2-output";
 
 export async function runDefaultSmoke(): Promise<void> {
   const hasOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
+  const missingToken = await callApi(VALID_PAYLOAD, { token: null });
+  const wrongToken = await callApi(VALID_PAYLOAD, { token: "wrong-token" });
   const valid = await callApi(VALID_PAYLOAD);
   printValid(valid);
   const quality = await callApi(QUALITY_PAYLOAD);
@@ -34,6 +36,11 @@ export async function runDefaultSmoke(): Promise<void> {
   console.log("STANDARD_API_V2_GENERATED_NO_KEY_STATUS", generatedNoKey.status);
   console.log("STANDARD_API_V2_GENERATED_NO_KEY_ERROR_CODE", generatedNoKey.body.error?.code ?? "none");
   console.log("STANDARD_API_V2_GENERATED_NO_KEY_OUTPUT", generatedNoKey.body.output ? "YES" : "NO");
+  console.log("STANDARD_API_V2_AUTH_MISSING_TOKEN", guard(missingToken, 401, "unauthorized"));
+  console.log("STANDARD_API_V2_AUTH_MISSING_TOKEN_OUTPUT", missingToken.body.output ? "YES" : "NO");
+  console.log("STANDARD_API_V2_AUTH_WRONG_TOKEN", guard(wrongToken, 401, "unauthorized"));
+  console.log("STANDARD_API_V2_AUTH_WRONG_TOKEN_OUTPUT", wrongToken.body.output ? "YES" : "NO");
+  console.log("STANDARD_API_V2_NO_RAW_STACK_TRACE", [missingToken, wrongToken, noKey, generatedNoKey].some(hasRawStackTrace) ? "FAIL" : "PASS");
   for (const [label, result, status, code] of guards) console.log(label, guard(result, status, code));
   console.log("STANDARD_API_V2_OLD_COMPOSE_ISOLATION", "PASS");
 
@@ -42,8 +49,10 @@ export async function runDefaultSmoke(): Promise<void> {
     : valid.status === 422 && !valid.body.ok && !valid.body.output;
   const noKeyOk = noKey.status === 422 && !noKey.body.ok && !noKey.body.output;
   const generatedNoKeyOk = generatedNoKey.status === 422 && !generatedNoKey.body.ok && !generatedNoKey.body.output && generatedNoKey.body.error?.code === "openai_api_key_missing";
+  const authOk = guard(missingToken, 401, "unauthorized") === "PASS" && !missingToken.body.output && guard(wrongToken, 401, "unauthorized") === "PASS" && !wrongToken.body.output;
+  const rawStackOk = ![missingToken, wrongToken, noKey, generatedNoKey].some(hasRawStackTrace);
   const guardsOk = guards.every(([, result, status, code]) => guard(result, status, code) === "PASS");
-  if (!validOk || !noKeyOk || !generatedNoKeyOk || !guardsOk) process.exitCode = 1;
+  if (!validOk || !noKeyOk || !generatedNoKeyOk || !authOk || !rawStackOk || !guardsOk) process.exitCode = 1;
 }
 
 export async function runGeneratedSmoke(): Promise<void> {

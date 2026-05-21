@@ -155,6 +155,7 @@ export type StandardGenerateV2ErrorCode =
   | "generation_fail_closed"
   | "no_output"
   | "openai_api_key_missing"
+  | "unauthorized"
   | "internal_error";
 
 export type StandardGenerateV2Error = {

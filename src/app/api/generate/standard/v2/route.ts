@@ -8,6 +8,7 @@ import type { StandardGenerationInput } from "@/models/standard-generation";
 import type { StandardFormV2ProductOutputType, StandardGenerateV2Diagnostics, StandardGenerateV2ErrorCode, StandardGenerateV2GeneratedBackgroundDiagnostics, StandardGenerateV2Request, StandardGenerateV2Response } from "@/models/standard-generation-api-v2";
 import { generateStandardPoster } from "@/use-cases/generate-standard-poster.use-case";
 import { resolveStandardV2Background } from "./background";
+import { authorizeStandardV2InternalTest } from "./auth";
 import { backgroundFallbackCode, buildV2Diagnostics } from "./diagnostics";
 import { buildTitleHierarchyContext } from "./title-hierarchy";
 
@@ -31,6 +32,7 @@ type Validation =
 export async function POST(request: Request): Promise<Response> {
   const requestId = randomUUID();
   try {
+    if (!authorizeStandardV2InternalTest(request).ok) return failure(requestId, 401, "unauthorized");
     const parsed = await parseJson(request);
     if (parsed === undefined) return failure(requestId, 400, "invalid_json");
     const validation = validateRequest(parsed);
@@ -39,7 +41,7 @@ export async function POST(request: Request): Promise<Response> {
     if (body.options?.includeCampusInfo === true) return failure(requestId, 400, "campus_info_not_supported");
 
     const background = await resolveStandardV2Background(body, CANVAS);
-    if (!background.ok) return failure(requestId, background.status, background.code, background.message, background.diagnostics);
+    if (!background.ok) return failure(requestId, background.status, background.code, background.message, body.options?.debug === true ? background.diagnostics : undefined);
     const assetWarnings: string[] = [];
     const brandAssets = await prepareBrandAssets(body, assetWarnings);
     const { input, summary } = await toGenerationInput(body, background.backgroundAsset, brandAssets);
@@ -140,8 +142,7 @@ function mapResult(requestId: string, result: Awaited<ReturnType<typeof generate
     source: "standard-api-v2",
     requestId,
     ...(result.output ? { output: { mimeType: "image/jpeg", base64: result.output.input.toString("base64"), width: result.output.width, height: result.output.height, sha256: result.output.sha256, byteLength: result.output.byteLength } } : {}),
-    diagnostics: buildV2Diagnostics(result, assetWarnings, summary, body, generatedBackground),
-    safety: { passed: result.safety.passed, codes: result.safety.checks.map((item) => `${item.code}:${item.passed ? "PASS" : "FAIL"}`) },
+    ...(body.options?.debug === true ? { diagnostics: buildV2Diagnostics(result, assetWarnings, summary, body, generatedBackground), safety: { passed: result.safety.passed, codes: result.safety.checks.map((item) => `${item.code}:${item.passed ? "PASS" : "FAIL"}`) } } : {}),
     ...(code ? { error: errorPayload(code, result.reason) } : {}),
     reason: result.reason,
   };
@@ -181,6 +182,7 @@ function errorInfo(code: StandardGenerateV2ErrorCode): { message: string; userMe
     no_output: ["Standard API v2 produced no output.", "本次未生成海报，请稍后重试。"],
     openai_api_key_missing: ["OPENAI_API_KEY missing.", "系统生成配置未完成。"],
     internal_error: ["Standard API v2 failed unexpectedly.", "系统暂时不可用，请稍后重试。"],
+    unauthorized: ["Standard API v2 internal test token is missing or invalid.", "当前测试入口无访问权限，请联系管理员。"],
   } satisfies Record<StandardGenerateV2ErrorCode, [string, string]>)[code];
   return { message, userMessage };
 }
