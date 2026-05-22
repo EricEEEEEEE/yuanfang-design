@@ -1,12 +1,13 @@
 import type { TitleBox, TitleLockupBlueprint } from "@/config/title-lockup-blueprint";
+import type { TitleDesignPlan } from "@/config/title-design-system";
 import type { ForbiddenZone } from "@/services/background-layout-intelligence.service";
 import type { SpatialStrategy } from "@/services/spatial-strategy-planner.service";
 
-export type ScoreTitleCandidatesInput = { lockupBlueprints: TitleLockupBlueprint[]; spatialStrategy: SpatialStrategy };
+export type ScoreTitleCandidatesInput = { lockupBlueprints: TitleLockupBlueprint[]; spatialStrategy: SpatialStrategy; titleDesignPlan?: TitleDesignPlan };
 export type TitleCandidateScoreBreakdown = {
   spatialFitScore: number; lockupIntegrityScore: number; hierarchyScore: number; readabilityScore: number;
   subtitleSafetyScore: number; forbiddenZoneAvoidanceScore: number; candidateDiversityScore: number;
-  repetitionPenalty: number; fallbackPenalty: number; totalScore: number; reasons: string[]; warnings: string[];
+  l7DesignSystemScore?: number; repetitionPenalty: number; fallbackPenalty: number; totalScore: number; reasons: string[]; warnings: string[];
 };
 export type RecommendedAction = "refine" | "keep" | "reject";
 export type RejectionReasonCode =
@@ -36,6 +37,7 @@ export type TitleCandidateScoringDiagnostic = {
   diversityGroupKey: string;
   nearestSimilarCandidateId: string | null;
   maxStructuralSimilarity: number;
+  l7DesignGateSummary?: string;
   refinerSelectionReason: string;
 };
 
@@ -67,7 +69,7 @@ type RefinerSelection = {
 
 export function scoreTitleCandidates(input: ScoreTitleCandidatesInput): ScoreTitleCandidatesResult {
   const scoredResults = input.lockupBlueprints
-    .map((blueprint) => scoreBlueprint(blueprint, input.lockupBlueprints, input.spatialStrategy));
+    .map((blueprint) => scoreBlueprint(blueprint, input.lockupBlueprints, input.spatialStrategy, input.titleDesignPlan));
   const rawRankByCandidateId = getRawRankByCandidateId(scoredResults);
   const rankedResults = scoredResults
     .sort(compareScoringResults)
@@ -121,7 +123,7 @@ function getRawRankByCandidateId(results: readonly TitleCandidateScoringResult[]
   );
 }
 
-function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], strategy: SpatialStrategy): TitleCandidateScoringResult {
+function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], strategy: SpatialStrategy, titleDesignPlan: TitleDesignPlan | undefined): TitleCandidateScoringResult {
   const reasons: string[] = []; const warnings: string[] = [];
   const arrangementSignature = createArrangementSignature(blueprint);
   const diversityGroupKey = getDiversityGroupKey(arrangementSignature);
@@ -134,13 +136,14 @@ function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLock
     subtitleSafetyScore: subtitleSafety(blueprint, strategy, reasons, warnings),
     forbiddenZoneAvoidanceScore: forbiddenAvoidance(blueprint, strategy, reasons),
     candidateDiversityScore: diversity(blueprint, all, arrangementSignature, similarityMatch, warnings),
+    l7DesignSystemScore: l7DesignSystemFit(blueprint, titleDesignPlan, reasons, warnings),
     repetitionPenalty: Math.round(similarityMatch.score * 30),
     fallbackPenalty: blueprint.isFallbackCandidate ? 100 : 0,
   };
   const totalScore = clamp(
     parts.spatialFitScore * 0.2 + parts.lockupIntegrityScore * 0.16 + parts.hierarchyScore * 0.15 +
     parts.readabilityScore * 0.14 + parts.subtitleSafetyScore * 0.1 + parts.forbiddenZoneAvoidanceScore * 0.13 +
-    parts.candidateDiversityScore * 0.12 - parts.repetitionPenalty - parts.fallbackPenalty,
+    parts.candidateDiversityScore * 0.07 + (parts.l7DesignSystemScore ?? 78) * 0.05 - parts.repetitionPenalty - parts.fallbackPenalty,
   );
   const shouldReject = blueprint.isFallbackCandidate || parts.spatialFitScore < 55 ||
     parts.lockupIntegrityScore < 60 || parts.readabilityScore < 50 || parts.forbiddenZoneAvoidanceScore < 70;
@@ -163,6 +166,7 @@ function scoreBlueprint(blueprint: TitleLockupBlueprint, all: readonly TitleLock
       diversityGroupKey,
       nearestSimilarCandidateId: similarityMatch.candidateId,
       maxStructuralSimilarity: Number(similarityMatch.score.toFixed(2)),
+      l7DesignGateSummary: titleDesignPlan ? `${titleDesignPlan.planId}:${parts.l7DesignSystemScore}` : "no-title-design-plan",
       refinerSelectionReason: "pending refiner selection.",
     },
   };
@@ -324,6 +328,48 @@ function diversity(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlu
   if (duplicateGroupIds.length > 0) warnings.push(`candidate repeats diversity group with ${duplicateGroupIds.join(",")}.`);
   if (value < 60) warnings.push("candidate is structurally similar to another candidate.");
   return value;
+}
+
+function l7DesignSystemFit(
+  blueprint: TitleLockupBlueprint,
+  titleDesignPlan: TitleDesignPlan | undefined,
+  reasons: string[],
+  warnings: string[],
+): number {
+  if (!titleDesignPlan) {
+    warnings.push("L7 titleDesignPlan missing; design gates are diagnostic only.");
+    return 78;
+  }
+
+  let score = 100;
+  const plan = titleDesignPlan;
+  const patternPlan = plan.referencePatternPlan;
+  const lockupRatio = area(blueprint.lockupBox) / 1_000_000;
+  const target = plan.adaptiveSizingPolicy.targetLockupAreaRatio;
+  const min = plan.adaptiveSizingPolicy.minAcceptableLockupAreaRatio;
+
+  if (!plan.lockupCompositionPlan.allowedModes.includes(blueprint.compositionMode)) {
+    score = penalty(score, 24, reasons, `L7 composition mode not allowed: ${blueprint.compositionMode}`);
+  }
+  if (blueprint.patternKeys.some((key) => patternPlan.disallowed.includes(key as (typeof patternPlan.disallowed)[number]))) {
+    score = penalty(score, 30, reasons, "L7 candidate uses disallowed reference pattern");
+  }
+  if (!blueprint.patternKeys.some((key) => patternPlan.primary.includes(key as (typeof patternPlan.primary)[number]) || patternPlan.secondary.includes(key as (typeof patternPlan.secondary)[number]))) {
+    score = penalty(score, 12, reasons, "L7 candidate lacks primary or secondary reference pattern");
+  }
+  if (lockupRatio < min) {
+    score = penalty(score, 22, reasons, `L7 lockup ratio below minimum: ${round(lockupRatio)}<${min}`);
+  } else if (Math.abs(lockupRatio - target) > 0.08) {
+    score = penalty(score, 8, reasons, `L7 lockup ratio far from target: ${round(lockupRatio)} vs ${target}`);
+  }
+  if (plan.hierarchyPlan.subtitlePriority === "strong" && blueprint.subtitleLockup.text && blueprint.subtitleLockup.placementPolicy === "hidden") {
+    score = penalty(score, 10, reasons, "L7 strong subtitle priority hidden by candidate");
+  }
+  if (plan.fontShapePlan.key === "cleanSystem" && plan.sceneStyleProfile.sceneKey !== "cleanNotice") {
+    score = penalty(score, 10, reasons, "L7 non-notice scene fell back to cleanSystem font shape");
+  }
+
+  return clamp(score);
 }
 
 function maxSimilarity(blueprint: TitleLockupBlueprint, all: readonly TitleLockupBlueprint[], signature = createArrangementSignature(blueprint)): SimilarityMatch {
@@ -507,3 +553,4 @@ function ySpan(blueprint: TitleLockupBlueprint): number {
 }
 function penalty(score: number, amount: number, reasons: string[], reason: string): number { reasons.push(reason); return score - amount; }
 function clamp(value: number): number { return Math.max(0, Math.min(100, Math.round(value))); }
+function round(value: number): number { return Math.round(value * 1000) / 1000; }

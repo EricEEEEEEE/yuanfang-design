@@ -49,6 +49,7 @@ function buildProductQualityDiagnostics(
 ): StandardGenerateV2ProductQualityDiagnostics {
   const mode = request.background?.mode ?? "debugFixture";
   const strategy = result.titleCandidatePipelineResult?.candidateResult.spatialStrategy;
+  const titleDesignPlan = result.titleCandidatePipelineResult?.candidateResult.titleDesignPlan;
   const hook = detectVisualHook(request);
   const generatedReady = mode === "generated" && generatedBackground?.source === "standard-background-generation-v1" && !generatedBackground.errorCode;
   const backgroundCanReflectTheme = generatedReady;
@@ -96,6 +97,14 @@ function buildProductQualityDiagnostics(
       titleFocus: request.title.mainTitle.trim(),
       subtitleUsedAsSupport: Boolean(request.title.subtitle?.trim()),
       titleBriefInfluence: "weak",
+      l7PlanId: titleDesignPlan?.planId,
+      scene: titleDesignPlan?.sceneStyleProfile.sceneKey,
+      fontShape: titleDesignPlan?.fontShapePlan.key,
+      titleStylePreset: titleDesignPlan?.rendererStylePlan.titleStylePreset,
+      targetLockupAreaRatio: titleDesignPlan?.adaptiveSizingPolicy.targetLockupAreaRatio,
+      primaryPatterns: titleDesignPlan?.referencePatternPlan.primary,
+      allowedCompositionModes: titleDesignPlan?.lockupCompositionPlan.allowedModes,
+      designQualityGates: titleDesignPlan?.designQualityGates,
     },
     warnings,
   };

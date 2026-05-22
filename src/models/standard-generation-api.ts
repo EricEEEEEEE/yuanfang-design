@@ -50,6 +50,18 @@ export type StandardApiForbiddenOverlapSummary = {
   overlapArea: number;
   overlapRatio: number;
 };
+export type StandardApiTitleDesignDiagnosticSummary = {
+  planId?: string;
+  scene?: string;
+  fontShape?: string;
+  titleStylePreset?: string;
+  targetLockupAreaRatio?: number;
+  minAcceptableLockupAreaRatio?: number;
+  primaryPatterns?: string[];
+  allowedCompositionModes?: string[];
+  qualityGates?: string[];
+  diagnostics?: string[];
+};
 export type StandardApiCandidateDiagnosticSummary = {
   candidateId: string;
   sourceCandidateId?: string;
@@ -57,6 +69,8 @@ export type StandardApiCandidateDiagnosticSummary = {
   recommendedAction?: string;
   shouldReject?: boolean;
   rejectionReasonCode?: string;
+  l7DesignSystemScore?: number;
+  l7DesignGateSummary?: string;
   lockupBox?: StandardApiBoxSummary;
   unitBoxes?: Array<StandardApiBoxSummary & { text: string; rotationDeg?: number }>;
   subtitleBox?: StandardApiBoxSummary | null;
@@ -83,6 +97,7 @@ export type StandardGenerateV1Response = {
     recommendedCandidateIds?: string[];
     rejectedCandidateIds?: string[];
     rejectionReasonCodes?: string[];
+    titleDesignDiagnostic?: StandardApiTitleDesignDiagnosticSummary;
     spatialDiagnostic?: StandardApiSpatialDiagnosticSummary;
     candidateDiagnostics?: StandardApiCandidateDiagnosticSummary[];
     selectedCandidateId?: string;

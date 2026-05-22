@@ -21,6 +21,7 @@ export function buildDiagnostics(
     recommendedCandidateIds: result.diagnostics.recommendedCandidateIds,
     rejectedCandidateIds: pipeline?.diagnostics.rejectedCandidateIds ?? [],
     rejectionReasonCodes: pipeline?.scoringResult.results.map((item) => `${item.candidateId}:${item.rejectionReasonCode}`) ?? [],
+    titleDesignDiagnostic: pipeline ? titleDesignDiagnostic(pipeline) : undefined,
     spatialDiagnostic: pipeline ? spatialDiagnostic(pipeline) : undefined,
     candidateDiagnostics: pipeline ? candidateDiagnostics(pipeline) : undefined,
     selectedCandidateId: result.selectedCandidateId,
@@ -67,12 +68,31 @@ function candidateDiagnostics(pipeline: NonNullable<StandardPosterResult["titleC
       recommendedAction: score?.recommendedAction,
       shouldReject: score?.shouldReject,
       rejectionReasonCode: score?.rejectionReasonCode,
+      l7DesignSystemScore: score?.score.l7DesignSystemScore,
+      l7DesignGateSummary: score?.diagnostic.l7DesignGateSummary,
       lockupBox: box(blueprint.lockupBox),
       unitBoxes: blueprint.titleUnits.map((unit) => ({ ...box(unit.unitBox), text: unit.text, rotationDeg: unit.unitBox.rotationDeg })),
       subtitleBox: blueprint.subtitleLockup.subtitleBox ? box(blueprint.subtitleLockup.subtitleBox) : null,
       forbiddenOverlapSummary: forbiddenOverlapSummary(blueprint, pipeline.candidateResult.spatialStrategy.backgroundLayout.forbiddenZones),
     };
   });
+}
+
+function titleDesignDiagnostic(pipeline: NonNullable<StandardPosterResult["titleCandidatePipelineResult"]>): NonNullable<StandardGenerateV1Response["diagnostics"]>["titleDesignDiagnostic"] {
+  const plan = pipeline.candidateResult.titleDesignPlan;
+  if (!plan) return undefined;
+  return {
+    planId: plan.planId,
+    scene: plan.sceneStyleProfile.sceneKey,
+    fontShape: plan.fontShapePlan.key,
+    titleStylePreset: plan.rendererStylePlan.titleStylePreset,
+    targetLockupAreaRatio: plan.adaptiveSizingPolicy.targetLockupAreaRatio,
+    minAcceptableLockupAreaRatio: plan.adaptiveSizingPolicy.minAcceptableLockupAreaRatio,
+    primaryPatterns: plan.referencePatternPlan.primary,
+    allowedCompositionModes: plan.lockupCompositionPlan.allowedModes,
+    qualityGates: plan.designQualityGates,
+    diagnostics: plan.diagnostics,
+  };
 }
 
 function forbiddenOverlapSummary(

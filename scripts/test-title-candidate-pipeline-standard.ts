@@ -38,6 +38,10 @@ async function main(): Promise<void> {
   console.error("PIPELINE_CANDIDATE_SOURCE", result.candidateResult.source);
   console.error("PIPELINE_SCORER_SOURCE", result.scoringResult.source);
   console.error("PIPELINE_REFINER_SOURCE", result.refinementResult.source);
+  console.error("PIPELINE_L7_PLAN_ID", result.candidateResult.titleDesignPlan?.planId ?? "none");
+  console.error("PIPELINE_L7_SCENE", result.candidateResult.titleDesignPlan?.sceneStyleProfile.sceneKey ?? "none");
+  console.error("PIPELINE_L7_FONT_SHAPE", result.candidateResult.titleDesignPlan?.fontShapePlan.key ?? "none");
+  console.error("PIPELINE_L7_STYLE_PRESET", result.candidateResult.titleDesignPlan?.rendererStylePlan.titleStylePreset ?? "none");
   console.error("PIPELINE_ORIGINAL_BLUEPRINT_COUNT", result.candidateResult.lockupBlueprints.length);
   console.error("PIPELINE_REFINED_BLUEPRINT_COUNT", result.refinementResult.refinedBlueprints.length);
   console.error("PIPELINE_FINAL_POOL_COUNT", result.finalCandidatePool.length);
@@ -114,6 +118,9 @@ function runTitleHierarchyChecks(result: GenerateScoredRefinedTitleCandidatesRes
     ["PIPELINE_SUBTITLE_HOOK_VISIBLE_WHEN_SAFE", pool.some((item) => item.subtitleLockup.text === context.subtitle && item.subtitleLockup.placementPolicy !== "hidden")],
     ["PIPELINE_RECOMMENDED_IDS_NOT_EMPTY", result.recommendedCandidateIds.length > 0],
     ["PIPELINE_REJECTED_GATES_UNCHANGED", result.finalCandidatePool.every((item) => !result.diagnostics.rejectedCandidateIds.includes(item.candidateId))],
+    ["PIPELINE_L7_PLAN_PRESENT", Boolean(result.candidateResult.titleDesignPlan?.planId)],
+    ["PIPELINE_L7_SCENE_MATCH", result.candidateResult.titleDesignPlan?.sceneStyleProfile.sceneKey === "achievementShowcase"],
+    ["PIPELINE_L7_SCORER_GATES_PRESENT", result.scoringResult.results.every((item) => typeof item.score.l7DesignSystemScore === "number")],
   ];
 }
 

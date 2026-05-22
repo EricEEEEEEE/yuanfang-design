@@ -4,6 +4,7 @@ import {
   DEFAULT_TITLE_FONT_FALLBACK,
   TITLE_FONT_REGISTRY,
 } from "../src/config/title-font-registry";
+import { titleFontRegistryForDesignPlan } from "../src/services/title-design-plan.service";
 import { generateScoredRefinedTitleCandidates } from "../src/use-cases/generate-scored-refined-title-candidates.use-case";
 import { renderMeasuredTitleAsset } from "../src/use-cases/render-measured-title-asset.use-case";
 
@@ -33,6 +34,10 @@ async function main(): Promise<void> {
   }
 
   const byId = new Map(pipeline.finalCandidatePool.map((item) => [item.candidateId, item]));
+  const titleDesignPlan = pipeline.candidateResult.titleDesignPlan;
+  const fontRegistry = titleDesignPlan
+    ? titleFontRegistryForDesignPlan(titleDesignPlan, TITLE_FONT_REGISTRY)
+    : TITLE_FONT_REGISTRY;
   const seen = new Set<string>();
   const ordered = [byId.get("c6-r1"), ...pipeline.recommendedCandidateIds.map((id) => byId.get(id)), ...pipeline.finalCandidatePool]
     .filter((item): item is (typeof pipeline.finalCandidatePool)[number] => Boolean(item))
@@ -44,9 +49,9 @@ async function main(): Promise<void> {
       source: "pipelineFinalPool",
       blueprint,
       canvas: { width: 1000, height: 1000 },
-      titleStylePreset: "achievement",
+      titleStylePreset: titleDesignPlan?.rendererStylePlan.titleStylePreset ?? "achievement",
       brandStyle: "yuanfangDefault",
-      fontRegistry: TITLE_FONT_REGISTRY,
+      fontRegistry,
       fontFallback: DEFAULT_TITLE_FONT_FALLBACK,
       safetyContext: { forbiddenZones: pipeline.candidateResult.spatialStrategy.backgroundLayout.forbiddenZones },
     });
@@ -54,16 +59,17 @@ async function main(): Promise<void> {
   }
 
   if (!result?.titleAsset) throw new Error(`TITLE_ASSET_HANDOFF_FAILED ${result?.reason ?? "no result"}`);
-  printResult(result);
+  printResult(result, pipeline.candidateResult.titleDesignPlan?.planId ?? "none");
 }
 
-function printResult(result: Awaited<ReturnType<typeof renderMeasuredTitleAsset>>): void {
+function printResult(result: Awaited<ReturnType<typeof renderMeasuredTitleAsset>>, titleDesignPlanId: string): void {
   const asset = result.titleAsset;
   if (!asset) throw new Error("TITLE_ASSET_MISSING");
   const mainTitleJoin = asset.glyphRuns.filter((run) => run.role !== "subtitle").map((run) => run.text).join("");
   const identityMatch = asset.safety.checks.find((item) => item.code === "raster_measurement_identity_matches")?.passed ? "PASS" : "FAIL";
   if (asset.rasterLayer?.input) writeFileSync(TITLE_ASSET_OUTPUT_PATH, asset.rasterLayer.input);
   console.log("TITLE_ASSET_HANDOFF_SOURCE", result.source);
+  console.log("TITLE_ASSET_L7_PLAN_ID", titleDesignPlanId);
   console.log("TITLE_ASSET_CANDIDATE_ID", asset.candidateId);
   console.log("TITLE_ASSET_SOURCE_CANDIDATE_ID", asset.sourceCandidateId ?? "none");
   console.log("TITLE_ASSET_OUTPUT_TARGET", asset.outputTarget);

@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { MODELS } from "@/config/models";
+import type { TitleDesignPlan } from "@/config/title-design-system";
 import {
   TITLE_COMPOSITION_GRAMMAR,
   type TitleCompositionMode,
@@ -30,6 +31,7 @@ import {
   type TitleOrientationPreference,
   type TitleSpatialStrategyMode,
 } from "@/services/spatial-strategy-planner.service";
+import { resolveTitleDesignPlan } from "@/services/title-design-plan.service";
 import type { TitleHierarchyContext } from "@/models/title-hierarchy-context";
 
 export type TitleCandidateUnitRole =
@@ -122,6 +124,7 @@ export type GenerateTitleCandidatesResult = {
   firstDraftUnitLayoutHints: TitleLockupDraftUnitLayoutHint[];
   lockupBlueprints: TitleLockupBlueprint[];
   candidates: TitleCandidate[];
+  titleDesignPlan?: TitleDesignPlan;
   reason: string;
   spatialStrategy: SpatialStrategy;
   titleHierarchyContext?: TitleHierarchyContext;
@@ -166,6 +169,11 @@ type LockupBlueprintCandidatePlanItem = {
   patternKeys: TitleReferencePatternKey[];
   effectIntent: TitleCandidateEffectIntent;
   decorationIntents: TitleCandidateDecorationIntent[];
+  titleDesignPlanId: string;
+  typographyIntent: string;
+  fontShape: string;
+  targetLockupAreaRatio: number;
+  minAcceptableLockupAreaRatio: number;
   reasonHint: string;
 };
 
@@ -283,7 +291,8 @@ export async function generateTitleCandidates(
   input: GenerateTitleCandidatesInput,
 ): Promise<GenerateTitleCandidatesResult> {
   const spatialStrategy = await planSpatialStrategy(input);
-  const candidatePlan = buildLockupBlueprintCandidatePlan(input.mainTitle, spatialStrategy);
+  const titleDesignPlan = resolveTitleDesignPlan({ ...input, spatialStrategy });
+  const candidatePlan = buildLockupBlueprintCandidatePlan(input.mainTitle, spatialStrategy, titleDesignPlan);
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -291,6 +300,7 @@ export async function generateTitleCandidates(
       input,
       "OPENAI_API_KEY missing; used spatial-strategy fallback candidates.",
       spatialStrategy,
+      titleDesignPlan,
       candidatePlan,
       "unavailable",
     );
@@ -309,7 +319,7 @@ export async function generateTitleCandidates(
           {
             role: "user",
             content: [
-              { type: "text", text: buildUserPrompt(input, spatialStrategy, candidatePlan) },
+              { type: "text", text: buildUserPrompt(input, spatialStrategy, candidatePlan, titleDesignPlan) },
               { type: "image_url", image_url: { url: buildImageUrl(input.backgroundImageBase64), detail: "low" } },
             ],
           },
@@ -363,6 +373,7 @@ export async function generateTitleCandidates(
         firstDraftUnitLayoutHints: parsedDrafts.lockupDrafts[0]?.unitLayoutHints ?? [],
         lockupBlueprints: parsedBlueprints.lockupBlueprints,
         candidates,
+        titleDesignPlan,
         reason: "AI generated validated structured lockupDrafts; system completed TitleLockupBlueprints.",
         spatialStrategy,
         titleHierarchyContext: input.titleHierarchyContext,
@@ -377,6 +388,7 @@ export async function generateTitleCandidates(
       input,
       `AI title lockup output invalid after retry: ${validationDiagnostics.join(" | ")}; used deterministic candidatePlan title lockups.`,
       spatialStrategy,
+      titleDesignPlan,
       candidatePlan,
       STRUCTURED_OUTPUT_MODE,
     );
@@ -388,6 +400,7 @@ export async function generateTitleCandidates(
     input,
     `AI title lockup output invalid after retry: ${validationDiagnostics.join(" | ")}; used fallback candidates.`,
     spatialStrategy,
+    titleDesignPlan,
     candidatePlan,
     STRUCTURED_OUTPUT_MODE,
   );
@@ -433,6 +446,7 @@ function buildUserPrompt(
   input: GenerateTitleCandidatesInput,
   spatialStrategy: SpatialStrategy,
   candidatePlan: readonly LockupBlueprintCandidatePlanItem[],
+  titleDesignPlan: TitleDesignPlan,
 ): string {
   const patternPool = spatialStrategy.patternPool;
   const primaryAnchor = getTextAnchorById(spatialStrategy, spatialStrategy.primaryTextAnchorId)
@@ -482,6 +496,17 @@ function buildUserPrompt(
     `backgroundLayout.negativeSpaceShape: ${spatialStrategy.backgroundLayout.negativeSpaceShape}`,
     `backgroundLayout.dominantFlow: ${spatialStrategy.backgroundLayout.dominantFlow}`,
     `backgroundLayout.recommendedTitleFlow: ${spatialStrategy.backgroundLayout.recommendedTitleFlow}`,
+    "【L7 Title Design Plan】",
+    JSON.stringify({
+      planId: titleDesignPlan.planId,
+      scene: titleDesignPlan.sceneStyleProfile.sceneKey,
+      fontShape: titleDesignPlan.fontShapePlan.key,
+      typography: titleDesignPlan.typographyStrategy,
+      adaptiveSizing: titleDesignPlan.adaptiveSizingPolicy,
+      hierarchy: titleDesignPlan.hierarchyPlan,
+      rendererStyle: titleDesignPlan.rendererStylePlan,
+      qualityGates: titleDesignPlan.designQualityGates,
+    }, null, 2),
     "推荐 primary patterns 摘要：",
     JSON.stringify(getReferencePatternSummaries(patternPool.primary), null, 2),
     "可混合 secondary patterns 摘要：",
@@ -2420,42 +2445,31 @@ function normalizeSubtitle(value: unknown): TitleCandidateSubtitle | undefined {
 function buildLockupBlueprintCandidatePlan(
   mainTitle: string,
   spatialStrategy: SpatialStrategy,
+  titleDesignPlan: TitleDesignPlan,
 ): LockupBlueprintCandidatePlanItem[] {
-  if (
-    mainTitle === "成长汇报课" &&
-    spatialStrategy.contentIntent === "achievementShowcase"
-  ) {
-    return [
-      createCandidatePlanItem(spatialStrategy, "c1", "leadHero", "verticalHeroStack", ["stageSplitHero"], "c1 使用 leadHero 与 verticalHeroStack，沿竖向聚光柱组织成长/汇报课。"),
-      createCandidatePlanItem(spatialStrategy, "c2", "fullHero", "stageMonument", ["stageMedalTitle"], "c2 使用完整标题与 stageMonument，形成成果展示主视觉重量。"),
-      createCandidatePlanItem(spatialStrategy, "c3", "threeStep", "staggeredColumn", ["businessLaunchHero", "stageSplitHero"], "c3 使用 threeStep 与 staggeredColumn，生成竖向错落节奏。"),
-      createCandidatePlanItem(spatialStrategy, "c4", "leadHero", "centerStageLockup", ["stageSplitHero", "stageMedalTitle"], "c4 使用中心舞台 lockup，保持标题稳定居中。"),
-      createCandidatePlanItem(spatialStrategy, "c5", "leadHero", "badgeHeroLockup", ["stageMedalTitle"], "c5 使用荣誉徽章感服务成果展示，但不改写主标题。"),
-      createCandidatePlanItem(spatialStrategy, "c6", "threeStep", "verticalHeroStack", ["stageSplitHero", "businessLaunchHero"], "c6 回到 verticalHeroStack，对 threeStep 做另一种竖向组织。"),
-    ];
-  }
-
   const semanticSplits = getSemanticSplitCandidates(mainTitle);
-  const compositionModes = getAllowedCompositionModes(semanticSplits, spatialStrategy.orientationPreference);
-  const patternGroups = getFallbackPatternGroups(spatialStrategy);
+  const compositionModes = getDesignCompositionModes(semanticSplits, spatialStrategy, titleDesignPlan);
+  const patternGroups = getDesignPatternGroups(titleDesignPlan);
 
   return Array.from({ length: 6 }, (_, index) => {
-    const semanticSplit = semanticSplits[index % semanticSplits.length];
     const compositionMode = compositionModes[index % compositionModes.length];
+    const semanticSplit = getSemanticSplitForCompositionMode(semanticSplits, compositionMode, index);
 
     return createCandidatePlanItem(
       spatialStrategy,
+      titleDesignPlan,
       `c${index + 1}`,
       semanticSplit.splitId,
       compositionMode,
       patternGroups[index] || patternGroups[0] || ["cleanBrandCentered"],
-      `c${index + 1} 按 spatialStrategy 生成固定 blueprint plan，AI 只补几何细节。`,
+      `c${index + 1} 按 L7 TitleDesignPlan 生成 ${compositionMode}，AI 只补几何细节。`,
     );
   });
 }
 
 function createCandidatePlanItem(
   spatialStrategy: SpatialStrategy,
+  titleDesignPlan: TitleDesignPlan,
   candidateId: string,
   semanticSplitId: string,
   compositionMode: TitleCompositionMode,
@@ -2473,8 +2487,56 @@ function createCandidatePlanItem(
     patternKeys,
     effectIntent: getFallbackEffectIntent(patternKeys[0]),
     decorationIntents: getFallbackDecorationIntents(patternKeys[0]),
+    titleDesignPlanId: titleDesignPlan.planId,
+    typographyIntent: titleDesignPlan.typographyStrategy.heroFontShape,
+    fontShape: titleDesignPlan.fontShapePlan.key,
+    targetLockupAreaRatio: titleDesignPlan.adaptiveSizingPolicy.targetLockupAreaRatio,
+    minAcceptableLockupAreaRatio: titleDesignPlan.adaptiveSizingPolicy.minAcceptableLockupAreaRatio,
     reasonHint,
   };
+}
+
+function getDesignCompositionModes(
+  semanticSplits: readonly TitleSemanticSplitCandidate[],
+  spatialStrategy: SpatialStrategy,
+  titleDesignPlan: TitleDesignPlan,
+): TitleCompositionMode[] {
+  const semanticAllowed = getAllowedCompositionModes(semanticSplits, spatialStrategy.orientationPreference);
+  const designAllowed = titleDesignPlan.lockupCompositionPlan.allowedModes.filter((mode) => semanticAllowed.includes(mode));
+  return designAllowed.length > 0 ? designAllowed : semanticAllowed.length > 0 ? semanticAllowed : ["stageMonument", "centerStageLockup"];
+}
+
+function getDesignPatternGroups(titleDesignPlan: TitleDesignPlan): TitleReferencePatternKey[][] {
+  const primary = titleDesignPlan.referencePatternPlan.primary;
+  const secondary = titleDesignPlan.referencePatternPlan.secondary;
+  const exploratory = titleDesignPlan.referencePatternPlan.exploratory;
+  const primaryFallback = primary[0] || "cleanBrandCentered";
+  const secondaryFallback = secondary[0] || primaryFallback;
+  const exploratoryFallback = exploratory[0] || secondaryFallback;
+
+  return [
+    [primaryFallback],
+    [primary[1] || primaryFallback],
+    [primary[2] || primaryFallback],
+    [primaryFallback, primary[1] || primaryFallback],
+    [primaryFallback, secondaryFallback],
+    [secondaryFallback, exploratoryFallback],
+  ];
+}
+
+function getSemanticSplitForCompositionMode(
+  semanticSplits: readonly TitleSemanticSplitCandidate[],
+  compositionMode: TitleCompositionMode,
+  index: number,
+): TitleSemanticSplitCandidate {
+  const preferred = semanticSplits.filter((split) => (
+    split.preferredCompositionModes.includes(compositionMode) &&
+    !split.avoidCompositionModes.includes(compositionMode)
+  ));
+  if (preferred.length > 0) return preferred[index % preferred.length];
+
+  const notAvoided = semanticSplits.filter((split) => !split.avoidCompositionModes.includes(compositionMode));
+  return notAvoided[index % Math.max(1, notAvoided.length)] ?? semanticSplits[0];
 }
 
 function getPlanPatternKeys(
@@ -2503,6 +2565,7 @@ function fallback(
   input: GenerateTitleCandidatesInput,
   reason: string,
   spatialStrategy: SpatialStrategy,
+  titleDesignPlan: TitleDesignPlan,
   candidatePlan: readonly LockupBlueprintCandidatePlanItem[],
   structuredOutputMode: GenerateTitleCandidatesResult["structuredOutputMode"],
 ): GenerateTitleCandidatesResult {
@@ -2539,6 +2602,7 @@ function fallback(
     firstDraftUnitLayoutHints: fallbackDrafts[0]?.unitLayoutHints ?? [],
     lockupBlueprints,
     candidates,
+    titleDesignPlan,
     reason: fallbackResult.reason,
     spatialStrategy,
     titleHierarchyContext: input.titleHierarchyContext,
@@ -2549,6 +2613,7 @@ function ruleBasedFromCandidatePlan(
   input: GenerateTitleCandidatesInput,
   reason: string,
   spatialStrategy: SpatialStrategy,
+  titleDesignPlan: TitleDesignPlan,
   candidatePlan: readonly LockupBlueprintCandidatePlanItem[],
   structuredOutputMode: GenerateTitleCandidatesResult["structuredOutputMode"],
 ): GenerateTitleCandidatesResult | undefined {
@@ -2576,6 +2641,7 @@ function ruleBasedFromCandidatePlan(
     firstDraftUnitLayoutHints: drafts[0]?.unitLayoutHints ?? [],
     lockupBlueprints,
     candidates,
+    titleDesignPlan,
     reason,
     spatialStrategy,
     titleHierarchyContext: input.titleHierarchyContext,
@@ -2727,6 +2793,9 @@ function buildBlueprintFromDraftAndPlan(
       "AI 只输出 lockupDraft；系统补全空间契约和安全策略。",
       "标题组合体必须服从 spatialStrategy 的 textAnchor。",
       "verticalFirst 代表沿竖向空间组织，不代表逐字竖排。",
+      `L7 titleDesignPlan=${planItem.titleDesignPlanId}`,
+      `L7 fontShape=${planItem.fontShape}; typography=${planItem.typographyIntent}`,
+      `L7 targetLockupAreaRatio=${planItem.targetLockupAreaRatio}; min=${planItem.minAcceptableLockupAreaRatio}`,
       planItem.reasonHint,
     ],
   };
@@ -2818,6 +2887,7 @@ function createLockupBlueprint(params: {
       "标题组合体必须服从 spatialStrategy 的 primary textAnchor。",
       "verticalFirst 代表沿竖向空间组织，不代表逐字竖排。",
       "fallback blueprint 仅用于诊断和 preview 兼容。",
+      `L7 titleDesignPlan=${params.planItem.titleDesignPlanId}`,
       params.planItem.reasonHint,
     ],
   };
@@ -2929,8 +2999,12 @@ function createLockupBoxFromPlan(
 ): TitleLockupBox {
   const safePadding = 24;
   const { widthRatio, heightRatio } = getLockupBoxRatios(planItem.compositionMode, grammar.flowAxis);
-  const width = Math.max(24, Math.min(Math.round(anchor.width * widthRatio), Math.round(anchor.width - 2)));
-  const height = Math.max(24, Math.min(Math.round(anchor.height * heightRatio), Math.round(anchor.height - 2)));
+  const baseWidth = Math.max(24, Math.min(Math.round(anchor.width * widthRatio), Math.round(anchor.width - 2)));
+  const baseHeight = Math.max(24, Math.min(Math.round(anchor.height * heightRatio), Math.round(anchor.height - 2)));
+  const targetArea = 1_000_000 * planItem.targetLockupAreaRatio;
+  const adaptiveScale = Math.max(1, Math.sqrt(targetArea / Math.max(1, baseWidth * baseHeight)));
+  const width = Math.max(24, Math.min(Math.round(baseWidth * adaptiveScale), Math.round(anchor.width - 2)));
+  const height = Math.max(24, Math.min(Math.round(baseHeight * adaptiveScale), Math.round(anchor.height - 2)));
   const horizontalShift = grammar.flowAxis === "vertical"
     ? (candidateIndex % 2 === 0 ? -0.025 : 0.025) * anchor.width
     : (candidateIndex % 3 - 1) * anchor.width * 0.025;

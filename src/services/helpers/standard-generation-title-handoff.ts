@@ -5,6 +5,7 @@ import type { TitleAssetHandoffResult } from "@/models/title-asset";
 import type { ForbiddenZone } from "@/services/background-layout-intelligence.service";
 import { handoffRetryRejection, reviewStandardGenerationCandidateLineage } from "@/services/helpers/standard-generation-title-lineage";
 import { scaleTitleLockupBlueprintToCanvas, STANDARD_TITLE_FROM_CANVAS } from "@/services/helpers/standard-generation-title-scale";
+import { titleFontRegistryForDesignPlan } from "@/services/title-design-plan.service";
 import type { GenerateScoredRefinedTitleCandidatesResult } from "@/use-cases/generate-scored-refined-title-candidates.use-case";
 import { renderMeasuredTitleAsset } from "@/use-cases/render-measured-title-asset.use-case";
 
@@ -47,9 +48,11 @@ export async function firstSuccessfulStandardTitleHandoff(input: StandardGenerat
       source: "pipelineFinalPool",
       blueprint,
       canvas: input.canvas,
-      titleStylePreset: "achievement",
+      titleStylePreset: pipeline.candidateResult.titleDesignPlan?.rendererStylePlan.titleStylePreset ?? "achievement",
       brandStyle: "yuanfangDefault",
-      fontRegistry: TITLE_FONT_REGISTRY,
+      fontRegistry: pipeline.candidateResult.titleDesignPlan
+        ? titleFontRegistryForDesignPlan(pipeline.candidateResult.titleDesignPlan, TITLE_FONT_REGISTRY)
+        : TITLE_FONT_REGISTRY,
       fontFallback: DEFAULT_TITLE_FONT_FALLBACK,
       safetyContext: { forbiddenZones: zones },
     });

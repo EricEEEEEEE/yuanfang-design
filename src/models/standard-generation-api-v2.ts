@@ -100,6 +100,14 @@ export type StandardGenerateV2ProductQualityDiagnostics = {
     titleFocus?: string;
     subtitleUsedAsSupport?: boolean;
     titleBriefInfluence?: "strong" | "partial" | "weak" | "none";
+    l7PlanId?: string;
+    scene?: string;
+    fontShape?: string;
+    titleStylePreset?: string;
+    targetLockupAreaRatio?: number;
+    primaryPatterns?: string[];
+    allowedCompositionModes?: string[];
+    designQualityGates?: string[];
   };
   warnings: string[];
 };

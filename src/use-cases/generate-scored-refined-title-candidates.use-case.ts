@@ -1,4 +1,5 @@
 import type { TitleLockupBlueprint, TitleLockupBox } from "@/config/title-lockup-blueprint";
+import type { TitleDesignPlan } from "@/config/title-design-system";
 import {
   generateTitleCandidates,
   type GenerateTitleCandidatesInput,
@@ -41,6 +42,7 @@ export type GenerateScoredRefinedTitleCandidatesResult = {
     refinedCandidateIdMap: Record<string, string>;
     sourceCandidateIdMap: Record<string, string>;
     safetyFlags: FinalCandidatePoolSafetyFlag[];
+    titleDesignPlan?: TitleDesignPlan;
     warnings: string[];
     reason: string;
   };
@@ -55,6 +57,7 @@ export async function generateScoredRefinedTitleCandidates(
   const scoringResult = scoreTitleCandidates({
     lockupBlueprints: candidateResult.lockupBlueprints,
     spatialStrategy: candidateResult.spatialStrategy,
+    titleDesignPlan: candidateResult.titleDesignPlan,
   });
   const refinementResult = refineTitleCandidates({
     lockupBlueprints: candidateResult.lockupBlueprints,
@@ -118,6 +121,7 @@ function buildFinalCandidatePool(
       refinedCandidateIdMap,
       sourceCandidateIdMap,
       safetyFlags,
+      titleDesignPlan: candidateResult.titleDesignPlan,
       warnings,
       reason,
     },

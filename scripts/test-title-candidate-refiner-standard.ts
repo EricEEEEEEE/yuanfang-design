@@ -34,6 +34,7 @@ async function main(): Promise<void> {
   const scoringResult = scoreTitleCandidates({
     lockupBlueprints: candidateResult.lockupBlueprints,
     spatialStrategy: candidateResult.spatialStrategy,
+    titleDesignPlan: candidateResult.titleDesignPlan,
   });
   const refinerResult = refineTitleCandidates({
     lockupBlueprints: candidateResult.lockupBlueprints,
@@ -44,6 +45,7 @@ async function main(): Promise<void> {
 
   console.error("REFINER_SOURCE", refinerResult.source);
   console.error("TITLE_CANDIDATES_SOURCE", candidateResult.source);
+  console.error("REFINER_L7_PLAN_ID", candidateResult.titleDesignPlan?.planId ?? "none");
   console.error("TITLE_LOCKUP_BLUEPRINT_COUNT", candidateResult.lockupBlueprints.length);
   console.error(
     "BLUEPRINT_IS_FALLBACK_FLAGS",
@@ -52,6 +54,10 @@ async function main(): Promise<void> {
   console.error(
     "SCORER_RECOMMENDED_ACTIONS",
     scoringResult.results.map((result) => `${result.candidateId}:${result.recommendedAction}`).join(" | "),
+  );
+  console.error(
+    "SCORER_L7_DESIGN_GATES",
+    scoringResult.results.map((result) => `${result.candidateId}:${result.score.l7DesignSystemScore ?? "none"}`).join(" | "),
   );
   console.error(
     "REFINER_INPUT_CANDIDATES",

@@ -28,6 +28,7 @@ async function main(): Promise<void> {
   const scoringResult = scoreTitleCandidates({
     lockupBlueprints: candidateResult.lockupBlueprints,
     spatialStrategy: candidateResult.spatialStrategy,
+    titleDesignPlan: candidateResult.titleDesignPlan,
   });
   const finalRanking = scoringResult.results.filter((result) => !result.shouldReject);
   const rejectedRanking = scoringResult.results.filter((result) => result.shouldReject);
@@ -45,6 +46,9 @@ async function main(): Promise<void> {
   console.error("SCORER_BEST_CANDIDATE_ID", scoringResult.bestCandidateId ?? "null");
   console.error("SCORER_NEEDS_REFINEMENT", String(scoringResult.needsRefinement));
   console.error("SCORER_REASON", scoringResult.reason);
+  console.error("L7_TITLE_DESIGN_PLAN_ID", candidateResult.titleDesignPlan?.planId ?? "none");
+  console.error("L7_TITLE_DESIGN_SCENE", candidateResult.titleDesignPlan?.sceneStyleProfile.sceneKey ?? "none");
+  console.error("L7_TITLE_DESIGN_FONT_SHAPE", candidateResult.titleDesignPlan?.fontShapePlan.key ?? "none");
   console.error(
     "SCORER_RANKING",
     scoringResult.results
@@ -55,6 +59,12 @@ async function main(): Promise<void> {
         result.shouldEnterRefiner ? "refiner" : "hold",
         result.shouldReject ? "reject" : "keep",
       ].join(":"))
+      .join(" | "),
+  );
+  console.error(
+    "SCORER_L7_DESIGN_GATES",
+    scoringResult.results
+      .map((result) => `${result.candidateId}:${result.score.l7DesignSystemScore ?? "none"}:${result.diagnostic.l7DesignGateSummary ?? "none"}`)
       .join(" | "),
   );
   console.error(
