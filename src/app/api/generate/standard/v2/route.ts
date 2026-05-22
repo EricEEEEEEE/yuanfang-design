@@ -4,12 +4,14 @@ import { resolve } from "node:path";
 import sharp from "sharp";
 import { BRAND } from "@/config/brand";
 import type { FinalBrandLayerAsset } from "@/models/final-composer";
-import type { StandardGenerationInput } from "@/models/standard-generation";
+import type { StandardGenerationInput, StandardGenerationResult } from "@/models/standard-generation";
 import type { StandardFormV2ProductOutputType, StandardGenerateV2Diagnostics, StandardGenerateV2ErrorCode, StandardGenerateV2GeneratedBackgroundDiagnostics, StandardGenerateV2Request, StandardGenerateV2Response } from "@/models/standard-generation-api-v2";
 import { generateStandardPoster } from "@/use-cases/generate-standard-poster.use-case";
+import { generateStandardV2WithCredit } from "@/use-cases/generate-standard-v2-with-credit.use-case";
 import { resolveStandardV2Background } from "./background";
 import { authorizeStandardV2InternalTest } from "./auth";
 import { backgroundFallbackCode, buildV2Diagnostics } from "./diagnostics";
+import { standardV2ErrorMessage, standardV2ErrorPayload } from "./errors";
 import { buildTitleHierarchyContext } from "./title-hierarchy";
 
 export const runtime = "nodejs";
@@ -40,19 +42,36 @@ export async function POST(request: Request): Promise<Response> {
     const body = validation.body;
     if (body.options?.includeCampusInfo === true) return failure(requestId, 400, "campus_info_not_supported");
 
-    const background = await resolveStandardV2Background(body, CANVAS);
-    if (!background.ok) return failure(requestId, background.status, background.code, background.message, body.options?.debug === true ? background.diagnostics : undefined);
-    const assetWarnings: string[] = [];
-    const brandAssets = await prepareBrandAssets(body, assetWarnings);
-    const { input, summary } = await toGenerationInput(body, background.backgroundAsset, brandAssets);
-    const mappedSummary = { ...summary, backgroundMode: background.mode, backgroundSource: background.backgroundAsset.source, backgroundPromptHash: background.generatedBackground?.promptHash, backgroundModelUsed: background.generatedBackground?.modelUsed };
-    const result = await generateStandardPoster(input);
+    const credit = await generateStandardV2WithCredit({
+      request: body,
+      requestId,
+      creditRequired: true,
+      execute: () => executeStandardGeneration(body),
+    });
+    if (!credit.ok) return failure(requestId, credit.status, credit.code, credit.message, body.options?.debug === true ? credit.diagnostics : undefined);
+    const result = credit.result;
     const code = resultErrorCode(result);
     const ok = !code;
-    return Response.json(mapResult(requestId, result, [...assetWarnings, ...background.warnings], mappedSummary, body, ok, code, background.generatedBackground), { status: ok ? 200 : 422 });
+    return Response.json(mapResult(requestId, result, credit.assetWarnings, credit.summary, body, ok, code, credit.generatedBackground), { status: ok ? 200 : 422 });
   } catch {
     return failure(requestId, 500, "internal_error");
   }
+}
+
+async function executeStandardGeneration(body: StandardGenerateV2Request) {
+  const background = await resolveStandardV2Background(body, CANVAS);
+  if (!background.ok) return { ok: false as const, status: background.status, code: background.code, message: background.message, diagnostics: body.options?.debug === true ? background.diagnostics : undefined };
+  const assetWarnings: string[] = [];
+  const brandAssets = await prepareBrandAssets(body, assetWarnings);
+  const { input, summary } = await toGenerationInput(body, background.backgroundAsset, brandAssets);
+  const result = await generateStandardPoster(input);
+  return {
+    ok: true as const,
+    result,
+    assetWarnings: [...assetWarnings, ...background.warnings],
+    summary: { ...summary, backgroundMode: background.mode, backgroundSource: background.backgroundAsset.source, backgroundPromptHash: background.generatedBackground?.promptHash, backgroundModelUsed: background.generatedBackground?.modelUsed },
+    generatedBackground: background.generatedBackground,
+  };
 }
 
 async function parseJson(request: Request): Promise<unknown | undefined> {
@@ -76,7 +95,7 @@ function validateRequest(value: unknown): Validation {
   if (value.title.subtitle !== undefined && !maxText(value.title.subtitle, 32)) return invalid("invalid_title_length", "subtitle is too long.");
   if (!validEmphasis(value.title.titleEmphasisWords, value.title.mainTitle)) return invalid("invalid_request", "titleEmphasisWords must be substrings of mainTitle.");
   if (value.form.avoidNotes !== undefined && !maxText(value.form.avoidNotes, 200)) return invalid("avoid_notes_too_long");
-  if (value.background !== undefined && (!isRecord(value.background) || !["debugFixture", "generated", "uploadedImage"].includes(String(value.background.mode)))) return invalid("unsupported_background_mode");
+  if (value.background !== undefined && (!isRecord(value.background) || !["debugFixture", "generated"].includes(String(value.background.mode)))) return invalid("unsupported_background_mode");
   if (value.options !== undefined && !validOptions(value.options)) return invalid("invalid_request", "options are invalid.");
   return { ok: true, body: value as StandardGenerateV2Request };
 }
@@ -136,55 +155,27 @@ async function readBrandAsset(path: string, width: number, placementPolicy: Fina
   }
 }
 
-function mapResult(requestId: string, result: Awaited<ReturnType<typeof generateStandardPoster>>, assetWarnings: string[], summary: Record<string, unknown>, body: StandardGenerateV2Request, ok: boolean, code?: StandardGenerateV2ErrorCode, generatedBackground?: StandardGenerateV2GeneratedBackgroundDiagnostics): StandardGenerateV2Response {
+function mapResult(requestId: string, result: StandardGenerationResult, assetWarnings: string[], summary: Record<string, unknown>, body: StandardGenerateV2Request, ok: boolean, code?: StandardGenerateV2ErrorCode, generatedBackground?: StandardGenerateV2GeneratedBackgroundDiagnostics): StandardGenerateV2Response {
   return {
     ok,
     source: "standard-api-v2",
     requestId,
     ...(result.output ? { output: { mimeType: "image/jpeg", base64: result.output.input.toString("base64"), width: result.output.width, height: result.output.height, sha256: result.output.sha256, byteLength: result.output.byteLength } } : {}),
     ...(body.options?.debug === true ? { diagnostics: buildV2Diagnostics(result, assetWarnings, summary, body, generatedBackground), safety: { passed: result.safety.passed, codes: result.safety.checks.map((item) => `${item.code}:${item.passed ? "PASS" : "FAIL"}`) } } : {}),
-    ...(code ? { error: errorPayload(code, result.reason) } : {}),
+    ...(code ? { error: standardV2ErrorPayload(code, result.reason) } : {}),
     reason: result.reason,
   };
 }
 
-function resultErrorCode(result: Awaited<ReturnType<typeof generateStandardPoster>>): StandardGenerateV2ErrorCode | undefined {
+function resultErrorCode(result: StandardGenerationResult): StandardGenerateV2ErrorCode | undefined {
   if (result.output && result.safety.passed && result.source === "standard-generation-integration-v1") return undefined;
   if (backgroundFallbackCode(result) === "openai_api_key_missing") return "openai_api_key_missing";
   return result.output ? "generation_fail_closed" : "no_output";
 }
 
 function failure(requestId: string, status: number, code: StandardGenerateV2ErrorCode, message?: string, diagnostics?: StandardGenerateV2Diagnostics): Response {
-  const response: StandardGenerateV2Response = { ok: false, source: "standard-api-v2", requestId, ...(diagnostics ? { diagnostics } : {}), error: errorPayload(code, message), reason: message ?? errorInfo(code).message };
+  const response: StandardGenerateV2Response = { ok: false, source: "standard-api-v2", requestId, ...(diagnostics ? { diagnostics } : {}), error: standardV2ErrorPayload(code, message), reason: message ?? standardV2ErrorMessage(code) };
   return Response.json(response, { status });
-}
-
-function errorPayload(code: StandardGenerateV2ErrorCode, message?: string) { const info = errorInfo(code); return { code, message: message ?? info.message, userMessage: info.userMessage }; }
-function errorInfo(code: StandardGenerateV2ErrorCode): { message: string; userMessage: string } {
-  const [message, userMessage] = ({
-    invalid_json: ["Request body must be valid JSON.", "请求格式无效，请刷新后重试。"],
-    invalid_request: ["Request body is invalid.", "请求参数无效，请检查表单。"],
-    missing_main_title: ["title.mainTitle is required.", "请填写海报标题。"],
-    invalid_title_length: ["title length is invalid.", "请控制标题长度。"],
-    invalid_product_output_type: ["form.productOutputType is invalid.", "请选择要做什么图。"],
-    event_brief_too_short: ["form.eventBrief must be 10-300 characters.", "请补充活动或课程内容。"],
-    style_brief_too_short: ["form.styleBrief must be 4-200 characters.", "请补充画面感觉。"],
-    avoid_notes_too_long: ["form.avoidNotes is too long.", "请缩短不希望出现的内容。"],
-    unsupported_background_mode: ["Requested background mode is not supported in Standard API v2.", "当前暂不支持这种背景模式。"],
-    campus_info_not_supported: ["campusInfoAsset is not supported in Standard API v2.", "当前暂不支持校区信息叠加。"],
-    prompt_build_failed: ["Generated background prompt build failed.", "背景生成准备失败，请调整描述后重试。"],
-    background_generation_failed: ["Generated background image failed.", "背景生成失败，请调整描述后重试。"],
-    background_image_empty: ["Generated background image is empty.", "背景生成失败，请稍后重试。"],
-    background_image_invalid: ["Generated background image is invalid.", "背景图片处理失败，请稍后重试。"],
-    background_image_normalize_failed: ["Generated background normalization failed.", "背景图片规格化失败，请稍后重试。"],
-    unknown_background_generation_error: ["Generated background failed unexpectedly.", "背景生成暂时不可用，请稍后重试。"],
-    generation_fail_closed: ["Standard API v2 generation failed closed.", "生成未通过安全检查，请调整描述后重试。"],
-    no_output: ["Standard API v2 produced no output.", "本次未生成海报，请稍后重试。"],
-    openai_api_key_missing: ["OPENAI_API_KEY missing.", "系统生成配置未完成。"],
-    internal_error: ["Standard API v2 failed unexpectedly.", "系统暂时不可用，请稍后重试。"],
-    unauthorized: ["Standard API v2 internal test token is missing or invalid.", "当前测试入口无访问权限，请联系管理员。"],
-  } satisfies Record<StandardGenerateV2ErrorCode, [string, string]>)[code];
-  return { message, userMessage };
 }
 
 function invalid(code: StandardGenerateV2ErrorCode, message?: string): Validation { return { ok: false, status: 400, code, message }; }

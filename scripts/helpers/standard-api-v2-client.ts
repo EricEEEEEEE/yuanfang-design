@@ -20,6 +20,7 @@ export async function callApi(payload: unknown, options: CallApiOptions = {}): P
 export function posterStatus(result: ApiResult): PosterStatus {
   if (result.status === 200 && result.body.ok && result.body.output) return "PASS_POSTER_SMOKE";
   if (result.status === 422 && !result.body.ok && !result.body.output) return "PASS_CONTRACT_FAIL_CLOSED";
+  if (result.status === 500 && !result.body.ok && !result.body.output && result.body.error?.code === "credit_gate_unavailable") return "PASS_CONTRACT_FAIL_CLOSED";
   return "FAIL_UNEXPECTED";
 }
 

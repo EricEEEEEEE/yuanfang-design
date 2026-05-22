@@ -155,6 +155,8 @@ export type StandardGenerateV2ErrorCode =
   | "generation_fail_closed"
   | "no_output"
   | "openai_api_key_missing"
+  | "insufficient_credit"
+  | "credit_gate_unavailable"
   | "unauthorized"
   | "internal_error";
 

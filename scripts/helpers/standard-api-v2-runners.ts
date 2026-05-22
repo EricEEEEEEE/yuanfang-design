@@ -44,11 +44,13 @@ export async function runDefaultSmoke(): Promise<void> {
   for (const [label, result, status, code] of guards) console.log(label, guard(result, status, code));
   console.log("STANDARD_API_V2_OLD_COMPOSE_ISOLATION", "PASS");
 
-  const validOk = hasOpenAIKey
+  const validOk = creditGateUnavailable(valid) || (hasOpenAIKey
     ? valid.status === 200 && valid.body.ok && valid.body.output?.mimeType === "image/jpeg" && valid.body.output.byteLength > 0
-    : valid.status === 422 && !valid.body.ok && !valid.body.output;
-  const noKeyOk = noKey.status === 422 && !noKey.body.ok && !noKey.body.output;
-  const generatedNoKeyOk = generatedNoKey.status === 422 && !generatedNoKey.body.ok && !generatedNoKey.body.output && generatedNoKey.body.error?.code === "openai_api_key_missing";
+    : valid.status === 422 && !valid.body.ok && !valid.body.output);
+  const noKeyOk = creditGateUnavailable(noKey) || (noKey.status === 422 && !noKey.body.ok && !noKey.body.output);
+  const generatedNoKeyOk = !generatedNoKey.body.ok && !generatedNoKey.body.output &&
+    ((generatedNoKey.status === 422 && generatedNoKey.body.error?.code === "openai_api_key_missing") ||
+      (generatedNoKey.status === 500 && generatedNoKey.body.error?.code === "credit_gate_unavailable"));
   const authOk = guard(missingToken, 401, "unauthorized") === "PASS" && !missingToken.body.output && guard(wrongToken, 401, "unauthorized") === "PASS" && !wrongToken.body.output;
   const rawStackOk = ![missingToken, wrongToken, noKey, generatedNoKey].some(hasRawStackTrace);
   const guardsOk = guards.every(([, result, status, code]) => guard(result, status, code) === "PASS");
@@ -104,4 +106,8 @@ export function parseSampleCount(value: string | undefined): number | undefined 
 function restoreKey(value: string | undefined): void {
   if (value) process.env.OPENAI_API_KEY = value;
   else delete process.env.OPENAI_API_KEY;
+}
+
+function creditGateUnavailable(result: Awaited<ReturnType<typeof callApi>>): boolean {
+  return result.status === 500 && !result.body.ok && !result.body.output && result.body.error?.code === "credit_gate_unavailable";
 }

@@ -8,6 +8,7 @@ import type {
 type TransactionServiceErrorCode =
   | "TRANSACTION_NOT_FOUND"
   | "TRANSACTION_SERVICE_ERROR";
+type PrismaLike = Pick<ReturnType<typeof getPrisma>, "transaction">;
 
 type TransactionRecord = Omit<Transaction, "createdAt" | "type"> & {
   type: string;
@@ -55,10 +56,10 @@ function normalizeError(error: unknown): never {
 
 export async function createTransaction(
   input: CreateTransactionInput,
+  client: PrismaLike = getPrisma(),
 ): Promise<Transaction> {
   try {
-    const prisma = getPrisma();
-    const transaction = await prisma.transaction.create({
+    const transaction = await client.transaction.create({
       data: {
         campusId: input.campusId,
         type: input.type,

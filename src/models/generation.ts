@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 export enum GenerationMode {
   STANDARD = "STANDARD",
   OPTIMIZE = "OPTIMIZE",
@@ -28,11 +30,12 @@ export interface Generation {
 }
 
 export interface CreateGenerationInput {
+  id?: string;
   userId: string;
   campusId: string;
   mode: GenerationMode;
   sceneType: string;
-  inputData: Record<string, unknown>;
+  inputData: Prisma.InputJsonObject;
   uploadedImages: string[];
   cost: number;
   modelUsed: string;
@@ -43,6 +46,8 @@ export interface CreateGenerationInput {
 export interface UpdateGenerationStatusInput {
   generationId: string;
   status: GenerationStatus;
-  resultImageUrl?: string;
-  errorMessage?: string;
+  cost?: number;
+  modelUsed?: string;
+  resultImageUrl?: string | null;
+  errorMessage?: string | null;
 }
